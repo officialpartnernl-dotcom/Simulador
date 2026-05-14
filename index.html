@@ -3,354 +3,540 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Unmuzzled Terminal</title>
-    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+    <title>Unmuzzled Terminal — Real-Time Engine</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, onAuthStateChanged, signInAnonymously } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, doc, setDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyBAXXP2PyJl0uDvsQPw_JLkLJsIooBwKhk",
+            authDomain: "unmuzzled-simulator.firebaseapp.com",
+            projectId: "unmuzzled-simulator",
+            storageBucket: "unmuzzled-simulator.firebasestorage.app",
+            messagingSenderId: "1043098614499",
+            appId: "1:1043098614499:web:99fbdfc62da47806bc23d6"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+        const appId = 'unmuzzled-prod';
+
+        const INTEL_TICKERS = ["RTX", "XOM", "NVDA", "GLD", "TSM", "SHEL", "MP"];
+
+        let currentUser = null;
+        let localState = { 
+            cash: 100000, 
+            holdings: {}, 
+            history: [],
+            customMarketPrices: {},
+            assetMeta: {} 
+        };
+        let allocationChart = null;
+
+        const parseSmartFloat = (val) => {
+            if (!val) return NaN;
+            const sanitized = val.toString().replace(',', '.');
+            return parseFloat(sanitized);
+        };
+
+        async function fetchLivePrice(ticker) {
+            try {
+                const response = await fetch(`https://stock-prices.pimpthenet.workers.dev/?ticker=${encodeURIComponent(ticker)}`);
+                if (!response.ok) throw new Error();
+                const data = await response.json();
+                return { price: data.price };
+            } catch (e) {
+                return null;
+            }
+        }
+
+        window.checkPrice = async () => {
+            const tickerInput = document.getElementById('trade-ticker');
+            const ticker = tickerInput.value.toUpperCase().trim();
+            if (!ticker) return showNotice("Enter a Ticker symbol.");
+            
+            const status = document.getElementById('price-status');
+            status.innerText = "Connecting to Satellite...";
+            
+            const result = await fetchLivePrice(ticker);
+            if (result) {
+                document.getElementById('trade-price').value = result.price.toFixed(2);
+                status.innerText = "Price Synchronized";
+                status.classList.add('text-[#E9C46A]');
+                setTimeout(() => status.innerText = "", 2000);
+            } else {
+                status.innerText = "Data Feed Offline. Enter manually.";
+                status.classList.remove('text-[#E9C46A]');
+            }
+        };
+
+        window.syncPortfolioPrices = async () => {
+            const tickers = Object.keys(localState.holdings);
+            if (tickers.length === 0) return;
+            
+            showNotice("Syncing Global Prices...");
+            for (const ticker of tickers) {
+                const data = await fetchLivePrice(ticker);
+                if (data) {
+                    localState.customMarketPrices[ticker] = data.price;
+                }
+            }
+            await saveToCloud(localState);
+            updateUI();
+        };
+
+        window.executeTrade = async () => {
+            if (!currentUser) return showNotice("Authenticating...");
+            
+            const tickerInput = document.getElementById('trade-ticker').value.toUpperCase().trim();
+            const type = document.getElementById('trade-type').value;
+            const qty = parseInt(document.getElementById('trade-qty').value);
+            const price = parseSmartFloat(document.getElementById('trade-price').value);
+            
+            if (!tickerInput || isNaN(qty) || isNaN(price) || qty <= 0) {
+                return showNotice("Review trade details.");
+            }
+
+            const totalCost = qty * price;
+            let newState = JSON.parse(JSON.stringify(localState));
+
+            if (type === 'BUY') {
+                if (totalCost > newState.cash) return showNotice("Insufficient Liquidity.");
+                newState.cash -= totalCost;
+                
+                if (!newState.holdings[tickerInput]) {
+                    newState.holdings[tickerInput] = { qty: 0, avgPrice: 0 };
+                    if (!newState.assetMeta) newState.assetMeta = {};
+                    newState.assetMeta[tickerInput] = {
+                        name: tickerInput,
+                        yield: document.getElementById('trade-yield').value || "0.00%",
+                        type: document.getElementById('trade-div-type').value,
+                        freq: document.getElementById('trade-freq').value
+                    };
+                }
+                
+                const h = newState.holdings[tickerInput];
+                h.avgPrice = ((h.qty * h.avgPrice) + totalCost) / (h.qty + qty);
+                h.qty += qty;
+                newState.customMarketPrices[tickerInput] = price;
+            } else {
+                if (!newState.holdings[tickerInput] || newState.holdings[tickerInput].qty < qty) {
+                    return showNotice("Insufficient assets.");
+                }
+                newState.cash += totalCost;
+                newState.holdings[tickerInput].qty -= qty;
+                if (newState.holdings[tickerInput].qty === 0) delete newState.holdings[tickerInput];
+            }
+
+            newState.history.unshift({
+                date: new Date().toLocaleString('en-US'),
+                type, ticker: tickerInput, qty, price, total: totalCost
+            });
+
+            await saveToCloud(newState);
+            document.getElementById('trade-ticker').value = "";
+        };
+
+        const saveToCloud = async (state) => {
+            if (!currentUser) return;
+            const userDoc = doc(db, 'artifacts', appId, 'users', currentUser.uid, 'settings', 'portfolio');
+            await setDoc(userDoc, state);
+        };
+
+        // FIXED: Custom UI for reset instead of confirm()
+        window.exportToExcel = () => {
+            const wb = XLSX.utils.book_new();
+
+            // --- Sheet 1: Portfolio ---
+            const holdings = localState.holdings || {};
+            const prices = localState.customMarketPrices || {};
+            const meta = localState.assetMeta || {};
+
+            const portfolioRows = [['Ticker', 'Shares', 'Avg Price', 'Market Price', 'Value', 'P/L ($)', 'P/L (%)', 'Dividend Yield', 'Type', 'Frequency']];
+            for (const [ticker, h] of Object.entries(holdings)) {
+                const mktPrice = prices[ticker] || h.avgPrice;
+                const value = h.qty * mktPrice;
+                const cost = h.qty * h.avgPrice;
+                const pl = value - cost;
+                const plPct = cost > 0 ? ((pl / cost) * 100).toFixed(2) + '%' : '0%';
+                const m = meta[ticker] || {};
+                portfolioRows.push([ticker, h.qty, h.avgPrice.toFixed(2), mktPrice.toFixed(2), value.toFixed(2), pl.toFixed(2), plPct, m.yield || '0.00%', m.type || '-', m.freq || '-']);
+            }
+            portfolioRows.push([]);
+            portfolioRows.push(['Liquid Cash', '', '', '', localState.cash.toFixed(2)]);
+            const totalEquity = Object.entries(holdings).reduce((sum, [t, h]) => sum + h.qty * (prices[t] || h.avgPrice), 0);
+            portfolioRows.push(['Total Portfolio Value', '', '', '', (localState.cash + totalEquity).toFixed(2)]);
+
+            const ws1 = XLSX.utils.aoa_to_sheet(portfolioRows);
+            ws1['!cols'] = [14,8,12,12,12,12,10,14,12,12].map(w => ({wch: w}));
+            XLSX.utils.book_append_sheet(wb, ws1, 'Portfolio');
+
+            // --- Sheet 2: History ---
+            const historyRows = [['Date', 'Ticker', 'Action', 'Qty', 'Price', 'Total']];
+            for (const tx of (localState.history || [])) {
+                historyRows.push([new Date(tx.ts).toLocaleString(), tx.ticker, tx.type, tx.qty, tx.price.toFixed(2), (tx.qty * tx.price).toFixed(2)]);
+            }
+            const ws2 = XLSX.utils.aoa_to_sheet(historyRows);
+            ws2['!cols'] = [20,10,8,8,12,14].map(w => ({wch: w}));
+            XLSX.utils.book_append_sheet(wb, ws2, 'History');
+
+            const date = new Date().toISOString().slice(0,10);
+            XLSX.writeFile(wb, `unmuzzled-portfolio-${date}.xlsx`);
+        };
+
+        window.resetPortfolio = async () => {
+            const btn = document.getElementById('wipe-btn');
+            if (btn.getAttribute('data-confirm') === 'false') {
+                btn.setAttribute('data-confirm', 'true');
+                btn.innerText = "CONFIRM PURGE?";
+                btn.classList.add('text-red-500');
+                setTimeout(() => {
+                    btn.setAttribute('data-confirm', 'false');
+                    btn.innerText = "Wipe Terminal Data";
+                    btn.classList.remove('text-red-500');
+                }, 3000);
+                return;
+            }
+            
+            const cleanState = { cash: 100000, holdings: {}, history: [], customMarketPrices: {}, assetMeta: {} };
+            localState = cleanState; // Update local immediately
+            await saveToCloud(cleanState);
+            showNotice("Terminal Data Purged.");
+            btn.setAttribute('data-confirm', 'false');
+            btn.innerText = "Wipe Terminal Data";
+            btn.classList.remove('text-red-500');
+            updateUI();
+        };
+
+        const initApp = async () => {
+            await signInAnonymously(auth);
+            onAuthStateChanged(auth, (user) => {
+                currentUser = user;
+                if (user) {
+                    const userDoc = doc(db, 'artifacts', appId, 'users', user.uid, 'settings', 'portfolio');
+                    onSnapshot(userDoc, (docSnap) => {
+                        if (docSnap.exists()) {
+                            localState = docSnap.data();
+                        } else {
+                            setDoc(userDoc, localState);
+                        }
+                        updateUI();
+                    }, (err) => console.error("Sync error:", err));
+                }
+            });
+        };
+
+        function updateUI() {
+            const netWorthEl = document.getElementById('net-worth');
+            const cashValEl = document.getElementById('cash-val');
+            const assetsValEl = document.getElementById('assets-val');
+            const plDisplay = document.getElementById('total-pl');
+
+            if (!netWorthEl || !cashValEl || !assetsValEl || !plDisplay) return;
+
+            let assetsValue = 0;
+            const tickers = Object.keys(localState.holdings);
+            const values = tickers.map(t => {
+                const price = localState.customMarketPrices?.[t] || 0;
+                const val = localState.holdings[t].qty * price;
+                assetsValue += val;
+                return val;
+            });
+
+            const netWorth = localState.cash + assetsValue;
+            const totalPL = netWorth - 100000;
+            const plPercent = (totalPL / 100000) * 100;
+
+            netWorthEl.innerText = formatCurrency(netWorth);
+            cashValEl.innerText = formatCurrency(localState.cash);
+            assetsValEl.innerText = formatCurrency(assetsValue);
+            
+            plDisplay.innerText = `${totalPL >= 0 ? '+' : ''}${formatCurrency(totalPL)} (${plPercent.toFixed(2)}%)`;
+            plDisplay.className = `text-lg font-mono font-bold ${totalPL >= 0 ? 'text-green-400' : 'text-red-400'}`;
+
+            updateChart(tickers, values, localState.cash);
+
+            const body = document.getElementById('portfolio-body');
+            if (body) {
+                body.innerHTML = tickers.map(t => {
+                    const h = localState.holdings[t];
+                    const info = localState.assetMeta?.[t] || { name: t, yield: "0%", type: "Dist.", freq: "N/A" };
+                    const marketPrice = localState.customMarketPrices?.[t] || 0;
+                    const curVal = h.qty * marketPrice;
+                    const pl = curVal - (h.qty * h.avgPrice);
+                    const plP = h.avgPrice > 0 ? ((marketPrice / h.avgPrice) - 1) * 100 : 0;
+                    
+                    return `
+                        <tr class="border-b border-slate-800/50 hover:bg-slate-800/30 transition-colors">
+                            <td class="px-6 py-4">
+                                <div class="flex items-center gap-2">
+                                    <div class="font-bold text-white">${t}</div>
+                                    ${INTEL_TICKERS.includes(t) ? '<span class="text-[7px] bg-[#E9C46A]/20 text-[#E9C46A] px-1 rounded border border-[#E9C46A]/30 font-black">INTEL</span>' : ''}
+                                </div>
+                                <div class="text-[9px] text-slate-500 uppercase truncate max-w-[100px]">${info.name}</div>
+                            </td>
+                            <td class="px-6 py-4">
+                                <div class="text-[10px] font-bold ${info.type === 'Acc.' ? 'text-blue-400' : 'text-[#E9C46A]'}">${info.type}</div>
+                                <div class="text-[9px] text-slate-500">${info.freq}</div>
+                            </td>
+                            <td class="px-6 py-4 text-right font-mono text-xs">
+                                <div class="text-white">${info.yield}</div>
+                            </td>
+                            <td class="px-6 py-4 text-right">
+                                <div class="font-mono font-bold text-white text-sm">${formatCurrency(curVal)}</div>
+                                <div class="text-[10px] text-slate-500">${h.qty} units @ ${formatCurrency(marketPrice)}</div>
+                            </td>
+                            <td class="px-6 py-4 text-right font-mono text-sm ${pl >= 0 ? 'text-green-400' : 'text-red-400'}">
+                                <div>${pl >= 0 ? '▲' : '▼'} ${plP.toFixed(2)}%</div>
+                                <div class="text-[9px] opacity-60">${formatCurrency(pl)}</div>
+                            </td>
+                        </tr>
+                    `;
+                }).join('');
+
+                if (tickers.length === 0) {
+                    body.innerHTML = '<tr><td colspan="5" class="p-12 text-center text-slate-600 italic">No assets in custody. Search and Transmit an order to start.</td></tr>';
+                }
+            }
+
+            const histBody = document.getElementById('history-body');
+            if (histBody) {
+                histBody.innerHTML = localState.history.slice(0, 5).map(h => `
+                    <div class="flex justify-between items-center p-3 border-b border-slate-800/50">
+                        <div class="text-xs">
+                            <span class="font-bold ${h.type === 'BUY' ? 'text-blue-400' : 'text-orange-400'}">${h.type}</span>
+                            <span class="text-white ml-1">${h.ticker}</span>
+                        </div>
+                        <div class="text-right text-[10px] text-slate-500 font-mono">
+                            ${h.qty} units @ ${formatCurrency(h.price)}
+                        </div>
+                    </div>
+                `).join('');
+            }
+            if (typeof lucide !== 'undefined') lucide.createIcons();
+        }
+
+        function updateChart(labels, data, cash) {
+            const ctxEl = document.getElementById('allocationChart');
+            if (!ctxEl) return;
+            const ctx = ctxEl.getContext('2d');
+            if (allocationChart) allocationChart.destroy();
+            allocationChart = new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: [...labels, "Cash"],
+                    datasets: [{
+                        data: [...data, cash],
+                        backgroundColor: ['#E9C46A', '#2A9D8F', '#E76F51', '#264653', '#F4A261', '#1a2744'],
+                        borderWidth: 0
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    cutout: '80%'
+                }
+            });
+        }
+
+        function formatCurrency(v) { return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(v); }
+        
+        function showNotice(m) { 
+            const n = document.getElementById('toast'); 
+            if (n) {
+                n.innerText = m; 
+                n.classList.remove('hidden'); 
+                setTimeout(() => n.classList.add('hidden'), 3500); 
+            }
+        }
+        
+        window.switchTab = (tab) => {
+            document.querySelectorAll('.tab-content').forEach(c => c.classList.add('hidden'));
+            document.getElementById(`tab-${tab}`).classList.remove('hidden');
+            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('border-[#E9C46A]', 'text-[#E9C46A]'));
+            event.currentTarget.classList.add('border-[#E9C46A]', 'text-[#E9C46A]');
+        };
+
+        window.toggleCustomFields = () => {
+            const fields = document.getElementById('custom-fields');
+            if (fields) fields.classList.toggle('hidden');
+        };
+
+        window.addEventListener('load', () => { 
+            if (typeof lucide !== 'undefined') lucide.createIcons(); 
+            initApp();
+            setTimeout(syncPortfolioPrices, 3000);
+        });
+    </script>
     <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: 'Courier New', monospace; background: linear-gradient(135deg, #0a0e27 0%, #16213e 100%); color: #00ff41; min-height: 100vh; padding: 20px; }
-        .container { max-width: 1200px; margin: 0 auto; }
-        header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 40px; border-bottom: 2px solid #00ff41; padding-bottom: 20px; }
-        .logo { display: flex; align-items: center; gap: 15px; font-size: 20px; font-weight: bold; }
-        .logo-icon { width: 40px; height: 40px; background: #ffd700; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: #0a0e27; font-weight: bold; }
-        .stats { display: flex; gap: 30px; }
-        .stat-item { text-align: right; }
-        .stat-label { font-size: 11px; color: #888; text-transform: uppercase; }
-        .stat-value { font-size: 20px; font-weight: bold; color: #ffd700; }
-        .dashboard { display: grid; grid-template-columns: 1fr 1.5fr; gap: 30px; margin-bottom: 30px; }
-        .panel { background: rgba(22, 33, 62, 0.8); border: 1px solid #00ff41; border-radius: 8px; padding: 25px; }
-        .panel-title { font-size: 13px; text-transform: uppercase; color: #ffd700; margin-bottom: 20px; border-bottom: 1px solid #00ff41; padding-bottom: 10px; }
-        .asset-pie { width: 150px; height: 150px; border-radius: 50%; background: conic-gradient(from 0deg, #ffd700 0deg 359deg); margin: 20px auto; }
-        .asset-info { display: flex; justify-content: space-between; margin: 10px 0; font-size: 12px; }
-        .asset-label { color: #888; }
-        .asset-value { color: #ffd700; font-weight: bold; }
-        .tabs { display: flex; gap: 20px; margin-bottom: 15px; border-bottom: 1px solid #00ff41; }
-        .tab { padding: 8px 0; font-size: 11px; text-transform: uppercase; color: #888; cursor: pointer; border-bottom: 2px solid transparent; }
-        .tab.active { color: #ffd700; border-bottom-color: #ffd700; }
-        .tab-content { display: none; }
-        .tab-content.active { display: block; }
-        .custody-table { width: 100%; border-collapse: collapse; font-size: 11px; }
-        .custody-table th { text-align: left; padding: 8px; border-bottom: 1px solid #00ff41; color: #ffd700; }
-        .custody-table td { padding: 8px; border-bottom: 1px solid #1a2845; }
-        .empty-message { text-align: center; color: #888; padding: 30px; font-size: 11px; }
-        .section { display: grid; grid-template-columns: 1fr 1fr; gap: 30px; margin-bottom: 30px; }
-        .form-group { margin-bottom: 15px; }
-        .form-label { display: block; font-size: 11px; text-transform: uppercase; color: #ffd700; margin-bottom: 6px; }
-        .form-input { width: 100%; padding: 10px; background: rgba(10, 14, 39, 0.8); border: 1px solid #00ff41; color: #00ff41; font-family: 'Courier New', monospace; border-radius: 4px; font-size: 12px; }
-        .form-input::placeholder { color: #666; }
-        .button { padding: 10px 20px; background: #ffd700; color: #0a0e27; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; text-transform: uppercase; font-size: 11px; font-family: 'Courier New', monospace; }
-        .button:hover { background: #ffed4e; }
-        .button-group { display: flex; gap: 10px; }
-        .button-group button { flex: 1; }
-        .search-button { padding: 10px 15px; background: #ffd700; color: #0a0e27; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; }
-        .input-group { display: flex; gap: 8px; }
-        .input-group input { flex: 1; }
-        .error { color: #ff4444; font-size: 11px; margin: 8px 0; }
-        .info-box { background: rgba(255, 215, 0, 0.1); border: 1px solid #ffd700; padding: 12px; border-radius: 4px; margin: 15px 0; color: #ffd700; font-size: 11px; }
-        .version { text-align: center; color: #666; font-size: 10px; margin-top: 20px; padding-top: 15px; border-top: 1px solid #1a2845; }
+        @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;800&family=JetBrains+Mono:wght@500;700&display=swap');
+        body { font-family: 'Plus Jakarta Sans', sans-serif; background: #040812; color: #e2e8f0; }
+        .glass { background: rgba(8, 15, 30, 0.7); border: 1px solid rgba(26, 39, 68, 0.8); backdrop-filter: blur(20px); }
+        .font-mono { font-family: 'JetBrains Mono', monospace; }
+        input { background: #0d1a2e !important; border: 1px solid #1a2744 !important; color: white !important; }
+        select { background: #0d1a2e !important; border: 1px solid #1a2744 !important; color: white !important; appearance: none; }
+        ::-webkit-scrollbar { width: 5px; }
+        ::-webkit-scrollbar-thumb { background: #1a2744; border-radius: 10px; }
     </style>
 </head>
-<body>
-    <div class="container">
-        <header>
-            <div class="logo">
-                <div class="logo-icon">U</div>
-                <div>UNMUZZLED TERMINAL<br><span style="font-size: 11px; color: #00ff41;">● GLOBAL SYNC ACTIVE</span></div>
-            </div>
-            <div class="stats">
-                <div class="stat-item">
-                    <div class="stat-label">Portfolio Value</div>
-                    <div class="stat-value" id="portfolio-value">$100,000.00</div>
+<body class="p-4 md:p-6 min-h-screen">
+    <div id="toast" class="fixed top-8 right-8 bg-red-600 text-white px-6 py-4 rounded-xl hidden z-50 border border-red-400 shadow-2xl font-bold transition-all"></div>
+    
+    <div class="max-w-7xl mx-auto">
+        <header class="flex flex-col md:flex-row justify-between items-center mb-10 gap-6">
+            <div class="flex items-center gap-4">
+                <div class="w-14 h-14 bg-[#E9C46A] rounded-2xl rotate-12 flex items-center justify-center shadow-xl shadow-yellow-500/10">
+                    <i data-lucide="shield-check" class="text-[#040812] w-8 h-8 -rotate-12"></i>
                 </div>
-                <div class="stat-item">
-                    <div class="stat-label">Total Performance</div>
-                    <div class="stat-value" id="total-performance">+$0.00 (0.00%)</div>
+                <div>
+                    <h1 class="text-2xl font-black tracking-tighter text-white uppercase">Unmuzzled <span class="text-[#E9C46A]">Terminal</span></h1>
+                    <div class="flex items-center gap-2 mt-1">
+                        <span class="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse"></span>
+                        <span id="cloud-status" class="text-[9px] uppercase font-black tracking-[0.2em] text-slate-500">Global Sync Active</span>
+                    </div>
+                </div>
+            </div>
+            <div class="flex gap-4">
+                <div class="glass px-6 py-4 rounded-2xl border-l-4 border-l-[#E9C46A] min-w-[180px]">
+                    <p class="text-[9px] text-slate-500 uppercase font-black mb-1">Portfolio Value</p>
+                    <p id="net-worth" class="text-xl font-bold font-mono text-white">$100,000.00</p>
+                </div>
+                <div class="glass px-6 py-4 rounded-2xl border-l-4 border-l-green-500 min-w-[180px]">
+                    <p class="text-[9px] text-slate-500 uppercase font-black mb-1">Total Performance</p>
+                    <p id="total-pl" class="text-xl font-bold font-mono text-green-400">+$0.00 (0%)</p>
                 </div>
             </div>
         </header>
 
-        <div class="dashboard">
-            <div class="panel">
-                <div class="panel-title">Asset Allocation</div>
-                <div class="asset-pie"></div>
-                <div class="asset-info">
-                    <div class="asset-label">LIQUID CASH</div>
-                    <div class="asset-value" id="liquid-cash">$100,000.00</div>
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
+            <div class="lg:col-span-4 space-y-6">
+                <div class="glass p-8 rounded-3xl relative overflow-hidden shadow-2xl border border-white/5">
+                    <h3 class="text-xs font-black text-slate-500 uppercase tracking-widest mb-8">Asset Allocation</h3>
+                    <div class="relative h-56">
+                        <canvas id="allocationChart"></canvas>
+                    </div>
+                    <div class="mt-8 space-y-3 border-t border-slate-800/50 pt-4 text-xs">
+                        <div class="flex justify-between">
+                            <span class="text-slate-500 font-bold uppercase tracking-tighter">Liquid Cash</span>
+                            <span id="cash-val" class="font-mono font-bold text-white">$100,000.00</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-slate-500 font-bold uppercase tracking-tighter">Equity Exposure</span>
+                            <span id="assets-val" class="font-mono font-bold text-white">$0.00</span>
+                        </div>
+                    </div>
+                    <button onclick="syncPortfolioPrices()" class="mt-6 w-full text-[10px] font-black uppercase text-[#E9C46A] border border-[#E9C46A]/20 py-3 rounded-xl hover:bg-[#E9C46A]/10 transition-colors flex items-center justify-center gap-2">
+                        <i data-lucide="refresh-cw" class="w-3 h-3"></i> Sync Global Prices
+                    </button>
                 </div>
-                <div class="asset-info">
-                    <div class="asset-label">EQUITY EXPOSURE</div>
-                    <div class="asset-value" id="equity-exposure">$0.00</div>
-                </div>
-                <button class="button" style="width: 100%; margin-top: 20px;" onclick="syncGlobalPrices()">⟳ SYNC GLOBAL PRICES</button>
-            </div>
 
-            <div class="panel">
-                <div class="tabs">
-                    <div class="tab active" onclick="switchTab(event, 'asset-custody')">Asset Custody</div>
-                    <div class="tab" onclick="switchTab(event, 'history')">History</div>
-                    <div class="tab" onclick="switchTab(event, 'intel-feed')">Intel Feed</div>
-                </div>
-                <div id="asset-custody" class="tab-content active">
-                    <table class="custody-table">
-                        <thead>
-                            <tr>
-                                <th>ASSET / INTEL</th>
-                                <th>POLICY</th>
-                                <th>DIV.</th>
-                                <th>VALUE</th>
-                                <th>P/L %</th>
-                            </tr>
-                        </thead>
-                        <tbody id="custody-body">
-                            <tr><td colspan="5" class="empty-message">No assets in custody. Search and Transmit an order to start.</td></tr>
-                        </tbody>
-                    </table>
-                </div>
-                <div id="history" class="tab-content">
-                    <table class="custody-table">
-                        <thead>
-                            <tr>
-                                <th>DATE</th>
-                                <th>ASSET</th>
-                                <th>ACTION</th>
-                                <th>QTY</th>
-                                <th>PRICE</th>
-                            </tr>
-                        </thead>
-                        <tbody id="history-body">
-                            <tr><td colspan="5" class="empty-message">No transactions recorded.</td></tr>
-                        </tbody>
-                    </table>
-                </div>
-                <div id="intel-feed" class="tab-content">
-                    <div class="empty-message">No intel feed available at this time.</div>
-                </div>
-                <div class="info-box">TERMINAL VERSION 3.2</div>
-            </div>
-        </div>
-
-        <div class="section">
-            <div class="panel">
-                <div class="panel-title">Market Order</div>
-                <div class="form-group">
-                    <div class="form-label">Ticker</div>
-                    <div class="input-group">
-                        <input type="text" id="ticker" class="form-input" placeholder="e.g., TSMC" value="TSMC">
-                        <button class="search-button" onclick="searchTicker()">🔍</button>
+                <div class="glass p-8 rounded-3xl shadow-2xl border-t border-white/5">
+                    <div class="flex justify-between items-center mb-6">
+                        <h3 class="text-xs font-black text-[#E9C46A] uppercase tracking-widest font-mono">Market Order</h3>
+                        <button onclick="toggleCustomFields()" class="text-[9px] text-slate-500 uppercase font-black hover:text-white">Dividend Options</button>
+                    </div>
+                    <div class="space-y-4">
+                        <div class="flex gap-2">
+                            <div class="flex-1">
+                                <label class="text-[9px] font-black text-slate-500 uppercase mb-2 block tracking-widest">Ticker</label>
+                                <input id="trade-ticker" type="text" placeholder="EX: AAPL" class="w-full p-4 rounded-xl outline-none text-sm font-bold uppercase tracking-widest">
+                            </div>
+                            <div class="pt-6">
+                                <button onclick="checkPrice()" class="h-[52px] px-4 bg-slate-700 rounded-xl text-white hover:bg-slate-600 flex items-center justify-center">
+                                    <i data-lucide="search" class="w-5 h-5"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <p id="price-status" class="text-[9px] font-bold uppercase text-center h-2 italic"></p>
+                        <div id="custom-fields" class="hidden space-y-4 p-4 bg-slate-900/50 rounded-2xl border border-slate-800">
+                            <div class="grid grid-cols-2 gap-3">
+                                <input id="trade-yield" type="text" value="0.00%" class="w-full p-2 rounded-lg text-xs font-mono" placeholder="Yield %">
+                                <select id="trade-freq" class="w-full p-2 rounded-lg text-xs font-bold px-2">
+                                    <option value="Quarterly">Quarterly</option>
+                                    <option value="Monthly">Monthly</option>
+                                </select>
+                            </div>
+                            <select id="trade-div-type" class="w-full p-2 rounded-lg text-xs font-bold px-2">
+                                <option value="Dist.">Distributing</option>
+                                <option value="Acc.">Accumulating</option>
+                            </select>
+                        </div>
+                        <div class="grid grid-cols-2 gap-3">
+                            <select id="trade-type" class="p-4 rounded-xl outline-none text-xs font-black uppercase px-4">
+                                <option value="BUY">Buy (Long)</option>
+                                <option value="SELL">Sell (Short)</option>
+                            </select>
+                            <input id="trade-qty" type="number" value="10" class="p-4 rounded-xl outline-none text-center font-mono font-bold">
+                        </div>
+                        <input id="trade-price" type="text" placeholder="Execution Price" class="w-full p-4 rounded-xl outline-none font-mono text-center text-lg">
+                        <button onclick="executeTrade()" class="w-full bg-[#E9C46A] text-[#040812] font-black py-5 rounded-xl hover:bg-white active:scale-95 transition-all uppercase text-xs mt-2 shadow-2xl">
+                            Transmit Order
+                        </button>
                     </div>
                 </div>
-                <div id="price-error" class="error"></div>
-                <div class="form-group">
-                    <div class="form-label">Quantity</div>
-                    <input type="number" id="quantity" class="form-input" value="10" min="1">
-                </div>
-                <div class="form-group">
-                    <div class="form-label">Execution Price</div>
-                    <input type="text" id="execution-price" class="form-input" readonly placeholder="Search ticker for live price">
-                </div>
-                <button class="button" style="width: 100%;" onclick="transmitOrder()">TRANSMIT ORDER</button>
             </div>
 
-            <div class="panel">
-                <div class="panel-title">Dividend Options</div>
-                <div class="form-group">
-                    <label style="display: flex; align-items: center; gap: 10px; cursor: pointer; font-size: 12px;">
-                        <input type="radio" name="dividend" value="reinvest" checked>
-                        Reinvest Dividends
-                    </label>
+            <div class="lg:col-span-8 space-y-6">
+                <div class="flex gap-10 border-b border-slate-800/50 pb-1 overflow-x-auto no-scrollbar">
+                    <button onclick="switchTab('assets')" class="tab-btn px-1 py-4 text-[10px] font-black uppercase tracking-[0.2em] border-b-2 border-[#E9C46A] text-[#E9C46A] whitespace-nowrap">Asset Custody</button>
+                    <button onclick="switchTab('history')" class="tab-btn px-1 py-4 text-[10px] font-black uppercase tracking-[0.2em] border-b-2 border-transparent text-slate-500 whitespace-nowrap">History</button>
+                    <button onclick="switchTab('intel')" class="tab-btn px-1 py-4 text-[10px] font-black uppercase tracking-[0.2em] border-b-2 border-transparent text-slate-500 whitespace-nowrap">Intel Feed</button>
                 </div>
-                <div class="form-group">
-                    <label style="display: flex; align-items: center; gap: 10px; cursor: pointer; font-size: 12px;">
-                        <input type="radio" name="dividend" value="cash">
-                        Receive as Cash
-                    </label>
+
+                <div id="tab-assets" class="tab-content">
+                    <div class="glass rounded-3xl overflow-hidden shadow-2xl border border-slate-800">
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-sm">
+                                <thead class="text-[9px] text-slate-500 uppercase font-black tracking-widest bg-black/40 border-b border-slate-800">
+                                    <tr>
+                                        <th class="px-6 py-6 text-left">Asset / Intel</th>
+                                        <th class="px-6 py-6 text-left">Policy</th>
+                                        <th class="px-6 py-6 text-right">Div.</th>
+                                        <th class="px-6 py-6 text-right">Value</th>
+                                        <th class="px-6 py-6 text-right">P/L %</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="portfolio-body" class="divide-y divide-slate-800/30"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="tab-history" class="tab-content hidden">
+                    <div class="glass rounded-3xl overflow-hidden shadow-xl max-h-[600px] border border-slate-800">
+                        <div id="history-body" class="divide-y divide-slate-800/50 p-2"></div>
+                    </div>
+                </div>
+
+                <div id="tab-intel" class="tab-content hidden grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div class="glass p-8 rounded-3xl border-l-4 border-l-[#E9C46A] shadow-lg">
+                        <h4 class="text-white font-black text-xs uppercase mb-3">Strategic Edge</h4>
+                        <p class="text-[11px] text-slate-400 leading-relaxed italic">"Simulated performance depends on active market sync. Use the 'Wipe' function to reset your educational session."</p>
+                    </div>
+                </div>
+
+                <div class="flex justify-between items-center px-4">
+                    <span class="text-[9px] font-black uppercase tracking-[0.3em] text-slate-700 italic">Terminal Engine v3.2</span>
+                    <div class="flex gap-4 items-center">
+                        <button onclick="exportToExcel()" class="text-[9px] text-[#E9C46A] hover:text-white uppercase font-black tracking-widest transition-all border border-[#E9C46A]/30 px-3 py-1.5 rounded-lg hover:bg-[#E9C46A]/10">⬇ Export Excel</button>
+                        <button id="wipe-btn" onclick="resetPortfolio()" data-confirm="false" class="text-[9px] text-slate-700 hover:text-red-400 uppercase font-black tracking-widest transition-all">Wipe Terminal Data</button>
+                    </div>
                 </div>
             </div>
         </div>
     </div>
 
-    <div class="version">TERMINAL VERSION 3.2</div>
-
-    <script>
-        const firebaseConfig = {
-    apiKey: "AIzaSyBAXXP2PyJl0uDvsQPw_JLkLJsIooBwKhk",
-    authDomain: "unmuzzled-simulator.firebaseapp.com",
-    projectId: "unmuzzled-simulator",
-    storageBucket: "unmuzzled-simulator.firebasestorage.app",
-    messagingSenderId: "1043098614499",
-    appId: "1:1043098614499:web:99fbdfc62da47806bc23d6"
-};
-
-        firebase.initializeApp(firebaseConfig);
-        const db = firebase.firestore();
-        let currentUser = null;
-
-        firebase.auth().signInAnonymously().then(user => {
-            currentUser = user.user.uid;
-            loadPortfolio();
-        }).catch(error => console.error('Auth error:', error));
-
-        // FETCH LIVE PRICE FROM CLOUDFLARE WORKER
-        async function fetchLivePrice(ticker) {
-            console.log('Fetching price for:', ticker);
-            try {
-                const url = `https://stock-prices.pimpthenet.workers.dev/?ticker=${encodeURIComponent(ticker)}`;
-                console.log('URL:', url);
-                const response = await fetch(url);
-                console.log('Response status:', response.status);
-                if (!response.ok) {
-                    console.error('Response not ok:', response.status);
-                    return null;
-                }
-                const data = await response.json();
-                console.log('Received data:', data);
-                return data;
-            } catch (e) {
-                console.error('Fetch error:', e);
-                return null;
-            }
-        }
-
-        async function searchTicker() {
-            console.log('searchTicker called');
-            const ticker = document.getElementById('ticker').value.toUpperCase();
-            const priceError = document.getElementById('price-error');
-            
-            if (!ticker) {
-                priceError.textContent = 'Enter a ticker symbol';
-                return;
-            }
-
-            priceError.textContent = 'Fetching price...';
-            const result = await fetchLivePrice(ticker);
-            
-            if (result && result.price) {
-                document.getElementById('execution-price').value = result.price.toFixed(2);
-                priceError.textContent = '';
-            } else {
-                priceError.textContent = 'Price feed offline. Enter manually.';
-                document.getElementById('execution-price').value = '';
-            }
-        }
-
-        async function syncGlobalPrices() {
-            const portfolio = await loadPortfolioData();
-            const tickers = Object.keys(portfolio.holdings);
-            for (const ticker of tickers) {
-                const result = await fetchLivePrice(ticker);
-                if (result && result.price) {
-                    portfolio.holdings[ticker].currentPrice = result.price;
-                }
-            }
-            if (currentUser) await db.collection('portfolios').doc(currentUser).set(portfolio);
-            loadPortfolio();
-        }
-
-        async function transmitOrder() {
-            const ticker = document.getElementById('ticker').value.toUpperCase();
-            const quantity = parseInt(document.getElementById('quantity').value);
-            const executionPrice = parseFloat(document.getElementById('execution-price').value);
-
-            if (!ticker || !quantity || !executionPrice) {
-                alert('Please fill all fields');
-                return;
-            }
-
-            const portfolio = await loadPortfolioData();
-            const cost = quantity * executionPrice;
-
-            if (cost > portfolio.liquidCash) {
-                alert('Insufficient funds');
-                return;
-            }
-
-            portfolio.liquidCash -= cost;
-            if (!portfolio.holdings[ticker]) {
-                portfolio.holdings[ticker] = { shares: 0, avgPrice: 0, currentPrice: executionPrice };
-            }
-
-            const prevValue = portfolio.holdings[ticker].shares * portfolio.holdings[ticker].avgPrice;
-            const newShares = portfolio.holdings[ticker].shares + quantity;
-            portfolio.holdings[ticker].avgPrice = (prevValue + cost) / newShares;
-            portfolio.holdings[ticker].shares = newShares;
-            portfolio.holdings[ticker].currentPrice = executionPrice;
-
-            portfolio.transactions.push({
-                date: new Date().toISOString(),
-                ticker: ticker,
-                action: 'BUY',
-                quantity: quantity,
-                price: executionPrice
-            });
-
-            if (currentUser) await db.collection('portfolios').doc(currentUser).set(portfolio);
-
-            document.getElementById('ticker').value = '';
-            document.getElementById('execution-price').value = '';
-            document.getElementById('quantity').value = '10';
-            document.getElementById('price-error').textContent = '';
-
-            loadPortfolio();
-        }
-
-        async function loadPortfolioData() {
-            if (!currentUser) return { liquidCash: 100000, holdings: {}, transactions: [] };
-            const doc = await db.collection('portfolios').doc(currentUser).get();
-            if (doc.exists) return doc.data();
-            const defaultPortfolio = { liquidCash: 100000, holdings: {}, transactions: [] };
-            await db.collection('portfolios').doc(currentUser).set(defaultPortfolio);
-            return defaultPortfolio;
-        }
-
-        async function loadPortfolio() {
-            const portfolio = await loadPortfolioData();
-            updateUI(portfolio);
-        }
-
-        function updateUI(portfolio) {
-            document.getElementById('liquid-cash').textContent = '$' + portfolio.liquidCash.toFixed(2);
-            let equityValue = 0;
-            const holdings = Object.entries(portfolio.holdings);
-
-            if (holdings.length === 0) {
-                document.getElementById('custody-body').innerHTML = '<tr><td colspan="5" class="empty-message">No assets in custody. Search and Transmit an order to start.</td></tr>';
-            } else {
-                let html = '';
-                for (const [ticker, data] of holdings) {
-                    const currentValue = data.shares * data.currentPrice;
-                    const pl = currentValue - (data.shares * data.avgPrice);
-                    const plPercent = ((pl / (data.shares * data.avgPrice)) * 100).toFixed(2);
-                    equityValue += currentValue;
-                    html += `<tr><td>${ticker}</td><td>${data.shares}</td><td>0</td><td>$${currentValue.toFixed(2)}</td><td style="color: ${pl >= 0 ? '#00ff41' : '#ff4444'}">${pl >= 0 ? '+' : ''}${plPercent}%</td></tr>`;
-                }
-                document.getElementById('custody-body').innerHTML = html;
-            }
-
-            const totalValue = portfolio.liquidCash + equityValue;
-            const performance = totalValue - 100000;
-            const performancePercent = ((performance / 100000) * 100).toFixed(2);
-
-            document.getElementById('portfolio-value').textContent = '$' + totalValue.toFixed(2);
-            document.getElementById('total-performance').textContent = (performance >= 0 ? '+' : '') + '$' + performance.toFixed(2) + ' (' + performancePercent + '%)';
-            document.getElementById('equity-exposure').textContent = '$' + equityValue.toFixed(2);
-
-            if (portfolio.transactions.length > 0) {
-                let html = '';
-                for (const tx of portfolio.transactions) {
-                    const date = new Date(tx.date).toLocaleDateString();
-                    html += `<tr><td>${date}</td><td>${tx.ticker}</td><td>${tx.action}</td><td>${tx.quantity}</td><td>$${tx.price.toFixed(2)}</td></tr>`;
-                }
-                document.getElementById('history-body').innerHTML = html;
-            }
-        }
-
-        function switchTab(event, tabName) {
-            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-            document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
-            event.target.classList.add('active');
-            document.getElementById(tabName).classList.add('active');
-        }
-    </script>
+    <footer class="mt-20 text-center border-t border-slate-900 pt-10 pb-20">
+        <p class="text-[10px] text-slate-600 uppercase tracking-[0.6em] mb-3 font-black">Unmuzzled Intelligence Systems</p>
+        <p class="text-[9px] text-slate-800 font-bold italic">Simulated trading terminal. Tactical education only.</p>
+    </footer>
 </body>
 </html>
