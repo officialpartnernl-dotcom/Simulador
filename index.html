@@ -8,292 +8,47 @@
     <script src="https://www.gstatic.com/firebasejs/10.0.0/firebase-firestore.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.0.0/firebase-auth.js"></script>
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-        
-        body {
-            font-family: 'Courier New', monospace;
-            background: linear-gradient(135deg, #0a0e27 0%, #16213e 100%);
-            color: #00ff41;
-            min-height: 100vh;
-            padding: 20px;
-        }
-        
-        .container {
-            max-width: 1400px;
-            margin: 0 auto;
-        }
-        
-        header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 40px;
-            border-bottom: 2px solid #00ff41;
-            padding-bottom: 20px;
-        }
-        
-        .logo {
-            display: flex;
-            align-items: center;
-            gap: 15px;
-            font-size: 24px;
-            font-weight: bold;
-            text-transform: uppercase;
-        }
-        
-        .logo-icon {
-            width: 50px;
-            height: 50px;
-            background: #ffd700;
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-weight: bold;
-            color: #0a0e27;
-        }
-        
-        .stats {
-            display: flex;
-            gap: 30px;
-        }
-        
-        .stat-item {
-            text-align: right;
-        }
-        
-        .stat-label {
-            font-size: 12px;
-            color: #888;
-            text-transform: uppercase;
-        }
-        
-        .stat-value {
-            font-size: 24px;
-            font-weight: bold;
-            color: #ffd700;
-        }
-        
-        .positive {
-            color: #00ff41;
-        }
-        
-        .negative {
-            color: #ff4444;
-        }
-        
-        .dashboard {
-            display: grid;
-            grid-template-columns: 1fr 1.5fr;
-            gap: 30px;
-            margin-bottom: 30px;
-        }
-        
-        .panel {
-            background: rgba(22, 33, 62, 0.8);
-            border: 1px solid #00ff41;
-            border-radius: 8px;
-            padding: 25px;
-        }
-        
-        .panel-title {
-            font-size: 14px;
-            text-transform: uppercase;
-            color: #ffd700;
-            margin-bottom: 20px;
-            border-bottom: 1px solid #00ff41;
-            padding-bottom: 10px;
-        }
-        
-        .asset-pie {
-            width: 200px;
-            height: 200px;
-            border-radius: 50%;
-            background: conic-gradient(from 0deg, #ffd700 0deg 359deg);
-            margin: 20px auto;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 12px;
-            color: #0a0e27;
-        }
-        
-        .asset-info {
-            display: flex;
-            justify-content: space-between;
-            margin: 15px 0;
-            font-size: 14px;
-        }
-        
-        .asset-label {
-            color: #888;
-        }
-        
-        .asset-value {
-            color: #ffd700;
-            font-weight: bold;
-        }
-        
-        .tabs {
-            display: flex;
-            gap: 20px;
-            margin-bottom: 20px;
-            border-bottom: 1px solid #00ff41;
-        }
-        
-        .tab {
-            padding: 10px 0;
-            font-size: 12px;
-            text-transform: uppercase;
-            color: #888;
-            cursor: pointer;
-            border-bottom: 2px solid transparent;
-        }
-        
-        .tab.active {
-            color: #ffd700;
-            border-bottom-color: #ffd700;
-        }
-        
-        .tab-content {
-            display: none;
-        }
-        
-        .tab-content.active {
-            display: block;
-        }
-        
-        .custody-table {
-            width: 100%;
-            border-collapse: collapse;
-            font-size: 12px;
-        }
-        
-        .custody-table th {
-            text-align: left;
-            padding: 10px;
-            border-bottom: 1px solid #00ff41;
-            color: #ffd700;
-        }
-        
-        .custody-table td {
-            padding: 12px 10px;
-            border-bottom: 1px solid #1a2845;
-        }
-        
-        .empty-message {
-            text-align: center;
-            color: #888;
-            padding: 40px;
-            font-style: italic;
-        }
-        
-        .section {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 30px;
-            margin-bottom: 30px;
-        }
-        
-        .form-group {
-            margin-bottom: 20px;
-        }
-        
-        .form-label {
-            display: block;
-            font-size: 12px;
-            text-transform: uppercase;
-            color: #ffd700;
-            margin-bottom: 8px;
-        }
-        
-        .form-input {
-            width: 100%;
-            padding: 12px;
-            background: rgba(10, 14, 39, 0.8);
-            border: 1px solid #00ff41;
-            color: #00ff41;
-            font-family: 'Courier New', monospace;
-            border-radius: 4px;
-        }
-        
-        .form-input::placeholder {
-            color: #666;
-        }
-        
-        .button {
-            padding: 12px 24px;
-            background: #ffd700;
-            color: #0a0e27;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-            font-family: 'Courier New', monospace;
-            font-weight: bold;
-            text-transform: uppercase;
-            font-size: 12px;
-            transition: all 0.3s;
-        }
-        
-        .button:hover {
-            background: #ffed4e;
-            transform: translateY(-2px);
-        }
-        
-        .button-group {
-            display: flex;
-            gap: 10px;
-        }
-        
-        .button-group button {
-            flex: 1;
-        }
-        
-        .search-button {
-            padding: 12px 16px;
-            background: #ffd700;
-            color: #0a0e27;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-            font-weight: bold;
-        }
-        
-        .info-box {
-            background: rgba(255, 215, 0, 0.1);
-            border: 1px solid #ffd700;
-            padding: 15px;
-            border-radius: 4px;
-            margin: 20px 0;
-            color: #ffd700;
-            font-size: 12px;
-        }
-        
-        .version {
-            text-align: center;
-            color: #666;
-            font-size: 11px;
-            margin-top: 30px;
-            padding-top: 20px;
-            border-top: 1px solid #1a2845;
-        }
-
-        .input-with-button {
-            display: flex;
-            gap: 10px;
-        }
-
-        .input-with-button input {
-            flex: 1;
-        }
-
-        .input-with-button button {
-            width: auto;
-        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Courier New', monospace; background: linear-gradient(135deg, #0a0e27 0%, #16213e 100%); color: #00ff41; min-height: 100vh; padding: 20px; }
+        .container { max-width: 1200px; margin: 0 auto; }
+        header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 40px; border-bottom: 2px solid #00ff41; padding-bottom: 20px; }
+        .logo { display: flex; align-items: center; gap: 15px; font-size: 20px; font-weight: bold; }
+        .logo-icon { width: 40px; height: 40px; background: #ffd700; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: #0a0e27; font-weight: bold; }
+        .stats { display: flex; gap: 30px; }
+        .stat-item { text-align: right; }
+        .stat-label { font-size: 11px; color: #888; text-transform: uppercase; }
+        .stat-value { font-size: 20px; font-weight: bold; color: #ffd700; }
+        .dashboard { display: grid; grid-template-columns: 1fr 1.5fr; gap: 30px; margin-bottom: 30px; }
+        .panel { background: rgba(22, 33, 62, 0.8); border: 1px solid #00ff41; border-radius: 8px; padding: 25px; }
+        .panel-title { font-size: 13px; text-transform: uppercase; color: #ffd700; margin-bottom: 20px; border-bottom: 1px solid #00ff41; padding-bottom: 10px; }
+        .asset-pie { width: 150px; height: 150px; border-radius: 50%; background: conic-gradient(from 0deg, #ffd700 0deg 359deg); margin: 20px auto; }
+        .asset-info { display: flex; justify-content: space-between; margin: 10px 0; font-size: 12px; }
+        .asset-label { color: #888; }
+        .asset-value { color: #ffd700; font-weight: bold; }
+        .tabs { display: flex; gap: 20px; margin-bottom: 15px; border-bottom: 1px solid #00ff41; }
+        .tab { padding: 8px 0; font-size: 11px; text-transform: uppercase; color: #888; cursor: pointer; border-bottom: 2px solid transparent; }
+        .tab.active { color: #ffd700; border-bottom-color: #ffd700; }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+        .custody-table { width: 100%; border-collapse: collapse; font-size: 11px; }
+        .custody-table th { text-align: left; padding: 8px; border-bottom: 1px solid #00ff41; color: #ffd700; }
+        .custody-table td { padding: 8px; border-bottom: 1px solid #1a2845; }
+        .empty-message { text-align: center; color: #888; padding: 30px; font-size: 11px; }
+        .section { display: grid; grid-template-columns: 1fr 1fr; gap: 30px; margin-bottom: 30px; }
+        .form-group { margin-bottom: 15px; }
+        .form-label { display: block; font-size: 11px; text-transform: uppercase; color: #ffd700; margin-bottom: 6px; }
+        .form-input { width: 100%; padding: 10px; background: rgba(10, 14, 39, 0.8); border: 1px solid #00ff41; color: #00ff41; font-family: 'Courier New', monospace; border-radius: 4px; font-size: 12px; }
+        .form-input::placeholder { color: #666; }
+        .button { padding: 10px 20px; background: #ffd700; color: #0a0e27; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; text-transform: uppercase; font-size: 11px; font-family: 'Courier New', monospace; }
+        .button:hover { background: #ffed4e; }
+        .button-group { display: flex; gap: 10px; }
+        .button-group button { flex: 1; }
+        .search-button { padding: 10px 15px; background: #ffd700; color: #0a0e27; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; }
+        .input-group { display: flex; gap: 8px; }
+        .input-group input { flex: 1; }
+        .error { color: #ff4444; font-size: 11px; margin: 8px 0; }
+        .info-box { background: rgba(255, 215, 0, 0.1); border: 1px solid #ffd700; padding: 12px; border-radius: 4px; margin: 15px 0; color: #ffd700; font-size: 11px; }
+        .version { text-align: center; color: #666; font-size: 10px; margin-top: 20px; padding-top: 15px; border-top: 1px solid #1a2845; }
     </style>
 </head>
 <body>
@@ -301,10 +56,7 @@
         <header>
             <div class="logo">
                 <div class="logo-icon">U</div>
-                <div>
-                    <div>UNMUZZLED TERMINAL</div>
-                    <div style="font-size: 12px; color: #00ff41; margin-top: 4px;">● GLOBAL SYNC ACTIVE</div>
-                </div>
+                <div>UNMUZZLED TERMINAL<br><span style="font-size: 11px; color: #00ff41;">● GLOBAL SYNC ACTIVE</span></div>
             </div>
             <div class="stats">
                 <div class="stat-item">
@@ -321,7 +73,7 @@
         <div class="dashboard">
             <div class="panel">
                 <div class="panel-title">Asset Allocation</div>
-                <div class="asset-pie" id="pie-chart"></div>
+                <div class="asset-pie"></div>
                 <div class="asset-info">
                     <div class="asset-label">LIQUID CASH</div>
                     <div class="asset-value" id="liquid-cash">$100,000.00</div>
@@ -330,9 +82,7 @@
                     <div class="asset-label">EQUITY EXPOSURE</div>
                     <div class="asset-value" id="equity-exposure">$0.00</div>
                 </div>
-                <button class="button" style="width: 100%; margin-top: 20px;" onclick="syncGlobalPrices()">
-                    ⟳ SYNC GLOBAL PRICES
-                </button>
+                <button class="button" style="width: 100%; margin-top: 20px;" onclick="syncGlobalPrices()">⟳ SYNC GLOBAL PRICES</button>
             </div>
 
             <div class="panel">
@@ -353,9 +103,7 @@
                             </tr>
                         </thead>
                         <tbody id="custody-body">
-                            <tr>
-                                <td colspan="5" class="empty-message">No assets in custody. Search and Transmit an order to start.</td>
-                            </tr>
+                            <tr><td colspan="5" class="empty-message">No assets in custody. Search and Transmit an order to start.</td></tr>
                         </tbody>
                     </table>
                 </div>
@@ -371,16 +119,14 @@
                             </tr>
                         </thead>
                         <tbody id="history-body">
-                            <tr>
-                                <td colspan="5" class="empty-message">No transactions recorded.</td>
-                            </tr>
+                            <tr><td colspan="5" class="empty-message">No transactions recorded.</td></tr>
                         </tbody>
                     </table>
                 </div>
                 <div id="intel-feed" class="tab-content">
                     <div class="empty-message">No intel feed available at this time.</div>
                 </div>
-                <div class="info-box" id="data-status">TERMINAL VERSION 3.2</div>
+                <div class="info-box">TERMINAL VERSION 3.2</div>
             </div>
         </div>
 
@@ -389,12 +135,12 @@
                 <div class="panel-title">Market Order</div>
                 <div class="form-group">
                     <div class="form-label">Ticker</div>
-                    <div class="input-with-button">
+                    <div class="input-group">
                         <input type="text" id="ticker" class="form-input" placeholder="e.g., TSMC" value="TSMC">
                         <button class="search-button" onclick="searchTicker()">🔍</button>
                     </div>
                 </div>
-                <div id="price-error" style="color: #ff4444; font-size: 12px; margin: 10px 0;"></div>
+                <div id="price-error" class="error"></div>
                 <div class="form-group">
                     <div class="form-label">Quantity</div>
                     <input type="number" id="quantity" class="form-input" value="10" min="1">
@@ -409,15 +155,15 @@
             <div class="panel">
                 <div class="panel-title">Dividend Options</div>
                 <div class="form-group">
-                    <label style="display: flex; align-items: center; gap: 10px; cursor: pointer;">
+                    <label style="display: flex; align-items: center; gap: 10px; cursor: pointer; font-size: 12px;">
                         <input type="radio" name="dividend" value="reinvest" checked>
-                        <span style="font-size: 14px;">Reinvest Dividends</span>
+                        Reinvest Dividends
                     </label>
                 </div>
                 <div class="form-group">
-                    <label style="display: flex; align-items: center; gap: 10px; cursor: pointer;">
+                    <label style="display: flex; align-items: center; gap: 10px; cursor: pointer; font-size: 12px;">
                         <input type="radio" name="dividend" value="cash">
-                        <span style="font-size: 14px;">Receive as Cash</span>
+                        Receive as Cash
                     </label>
                 </div>
             </div>
@@ -427,7 +173,6 @@
     <div class="version">TERMINAL VERSION 3.2</div>
 
     <script>
-        // Firebase Configuration
         const firebaseConfig = {
             apiKey: "AIzaSyDfZqz2xHwVJJX5x7kLz9mQ3kR4vS5tU6w",
             authDomain: "unmuzzled-simulator.firebaseapp.com",
@@ -439,25 +184,28 @@
 
         firebase.initializeApp(firebaseConfig);
         const db = firebase.firestore();
-        const auth = firebase.auth();
-
         let currentUser = null;
 
-        // Initialize anonymous auth
         firebase.auth().signInAnonymously().then(user => {
             currentUser = user.user.uid;
             loadPortfolio();
-        }).catch(error => {
-            console.error('Auth error:', error);
-        });
+        }).catch(error => console.error('Auth error:', error));
 
-        // Fetch live price from Cloudflare Worker
+        // FETCH LIVE PRICE FROM CLOUDFLARE WORKER
         async function fetchLivePrice(ticker) {
+            console.log('Fetching price for:', ticker);
             try {
-                const response = await fetch(`https://stock-prices.pimpthenet.workers.dev/?ticker=${encodeURIComponent(ticker)}`);
-                if (!response.ok) throw new Error('Network response was not ok');
+                const url = `https://stock-prices.pimpthenet.workers.dev/?ticker=${encodeURIComponent(ticker)}`;
+                console.log('URL:', url);
+                const response = await fetch(url);
+                console.log('Response status:', response.status);
+                if (!response.ok) {
+                    console.error('Response not ok:', response.status);
+                    return null;
+                }
                 const data = await response.json();
-                return { price: data.price };
+                console.log('Received data:', data);
+                return data;
             } catch (e) {
                 console.error('Fetch error:', e);
                 return null;
@@ -465,6 +213,7 @@
         }
 
         async function searchTicker() {
+            console.log('searchTicker called');
             const ticker = document.getElementById('ticker').value.toUpperCase();
             const priceError = document.getElementById('price-error');
             
@@ -474,7 +223,6 @@
             }
 
             priceError.textContent = 'Fetching price...';
-            
             const result = await fetchLivePrice(ticker);
             
             if (result && result.price) {
@@ -489,18 +237,13 @@
         async function syncGlobalPrices() {
             const portfolio = await loadPortfolioData();
             const tickers = Object.keys(portfolio.holdings);
-            
             for (const ticker of tickers) {
                 const result = await fetchLivePrice(ticker);
                 if (result && result.price) {
                     portfolio.holdings[ticker].currentPrice = result.price;
                 }
             }
-            
-            if (currentUser) {
-                await db.collection('portfolios').doc(currentUser).set(portfolio);
-            }
-            
+            if (currentUser) await db.collection('portfolios').doc(currentUser).set(portfolio);
             loadPortfolio();
         }
 
@@ -524,7 +267,7 @@
 
             portfolio.liquidCash -= cost;
             if (!portfolio.holdings[ticker]) {
-                portfolio.holdings[ticker] = { shares: 0, avgPrice: 0 };
+                portfolio.holdings[ticker] = { shares: 0, avgPrice: 0, currentPrice: executionPrice };
             }
 
             const prevValue = portfolio.holdings[ticker].shares * portfolio.holdings[ticker].avgPrice;
@@ -541,9 +284,7 @@
                 price: executionPrice
             });
 
-            if (currentUser) {
-                await db.collection('portfolios').doc(currentUser).set(portfolio);
-            }
+            if (currentUser) await db.collection('portfolios').doc(currentUser).set(portfolio);
 
             document.getElementById('ticker').value = '';
             document.getElementById('execution-price').value = '';
@@ -555,18 +296,9 @@
 
         async function loadPortfolioData() {
             if (!currentUser) return { liquidCash: 100000, holdings: {}, transactions: [] };
-
             const doc = await db.collection('portfolios').doc(currentUser).get();
-            if (doc.exists) {
-                return doc.data();
-            }
-
-            const defaultPortfolio = {
-                liquidCash: 100000,
-                holdings: {},
-                transactions: []
-            };
-
+            if (doc.exists) return doc.data();
+            const defaultPortfolio = { liquidCash: 100000, holdings: {}, transactions: [] };
             await db.collection('portfolios').doc(currentUser).set(defaultPortfolio);
             return defaultPortfolio;
         }
@@ -578,7 +310,6 @@
 
         function updateUI(portfolio) {
             document.getElementById('liquid-cash').textContent = '$' + portfolio.liquidCash.toFixed(2);
-
             let equityValue = 0;
             const holdings = Object.entries(portfolio.holdings);
 
@@ -591,13 +322,7 @@
                     const pl = currentValue - (data.shares * data.avgPrice);
                     const plPercent = ((pl / (data.shares * data.avgPrice)) * 100).toFixed(2);
                     equityValue += currentValue;
-                    html += `<tr>
-                        <td>${ticker}</td>
-                        <td>${data.shares}</td>
-                        <td>0</td>
-                        <td>$${currentValue.toFixed(2)}</td>
-                        <td class="${pl >= 0 ? 'positive' : 'negative'}">${pl >= 0 ? '+' : ''}${plPercent}%</td>
-                    </tr>`;
+                    html += `<tr><td>${ticker}</td><td>${data.shares}</td><td>0</td><td>$${currentValue.toFixed(2)}</td><td style="color: ${pl >= 0 ? '#00ff41' : '#ff4444'}">${pl >= 0 ? '+' : ''}${plPercent}%</td></tr>`;
                 }
                 document.getElementById('custody-body').innerHTML = html;
             }
@@ -614,25 +339,15 @@
                 let html = '';
                 for (const tx of portfolio.transactions) {
                     const date = new Date(tx.date).toLocaleDateString();
-                    html += `<tr>
-                        <td>${date}</td>
-                        <td>${tx.ticker}</td>
-                        <td>${tx.action}</td>
-                        <td>${tx.quantity}</td>
-                        <td>$${tx.price.toFixed(2)}</td>
-                    </tr>`;
+                    html += `<tr><td>${date}</td><td>${tx.ticker}</td><td>${tx.action}</td><td>${tx.quantity}</td><td>$${tx.price.toFixed(2)}</td></tr>`;
                 }
                 document.getElementById('history-body').innerHTML = html;
             }
         }
 
         function switchTab(event, tabName) {
-            const tabs = document.querySelectorAll('.tab');
-            const contents = document.querySelectorAll('.tab-content');
-            
-            tabs.forEach(t => t.classList.remove('active'));
-            contents.forEach(c => c.classList.remove('active'));
-            
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
             event.target.classList.add('active');
             document.getElementById(tabName).classList.add('active');
         }
