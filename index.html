@@ -315,9 +315,9 @@
             spacer.eachCell(c => c.fill = darkFill('F4F6FB'));
 
             const addTotal = (label, value, color) => {
-                ws.mergeCells(`A${ws.rowCount+1}:D${ws.rowCount+1}`);
                 const row = ws.addRow([label, '', '', '', parseFloat(value.toFixed(2))]);
                 row.height = 18;
+                ws.mergeCells(`A${row.number}:D${row.number}`);
                 row.getCell(1).font = { name: 'Calibri', bold: true, size: 10, color: { argb: 'FF' + GREY } };
                 row.getCell(5).font = { name: 'Calibri', bold: true, size: 10, color: { argb: 'FF' + (color || DARK) } };
                 row.eachCell(c => { c.fill = darkFill('EEF1F8'); c.alignment = { horizontal: 'right', vertical: 'middle' }; });
@@ -360,7 +360,7 @@
             let idx2 = 0;
             for (const tx of (localState.history || [])) {
                 const bg2 = idx2 % 2 === 0 ? 'F4F6FB' : 'FFFFFF';
-                const dRow = ws2.addRow([new Date(tx.ts).toLocaleString(), tx.ticker, tx.type, tx.qty, parseFloat(tx.price.toFixed(2)), parseFloat((tx.qty * tx.price).toFixed(2))]);
+                const dRow = ws2.addRow([tx.date || new Date().toLocaleString(), tx.ticker, tx.type, tx.qty, parseFloat(tx.price.toFixed(2)), parseFloat((tx.qty * tx.price).toFixed(2))]);
                 dRow.height = 16;
                 dRow.eachCell((cell, col) => {
                     cell.font = { name: 'Calibri', size: 10, color: { argb: col === 3 ? (tx.type === 'BUY' ? 'FF1a56b0' : 'FF' + RED) : 'FF1a1a2e' } };
