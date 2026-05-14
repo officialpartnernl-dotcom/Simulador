@@ -7,7 +7,7 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/exceljs@4.3.0/dist/exceljs.min.js"></script>
     
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
@@ -151,44 +151,177 @@
         };
 
         // FIXED: Custom UI for reset instead of confirm()
-        window.exportToExcel = () => {
-            const wb = XLSX.utils.book_new();
+        window.exportToExcel = async () => {
+            const workbook = new ExcelJS.Workbook();
+            workbook.creator = 'Unmuzzled Terminal';
+            workbook.created = new Date();
 
-            // --- Sheet 1: Portfolio ---
+            const DARK = '040812';
+            const GOLD = 'E9C46A';
+            const DARK2 = '0d1b2a';
+            const MID  = '1a2845';
+            const GREEN = '4ade80';
+            const RED   = 'f87171';
+            const WHITE = 'FFFFFF';
+            const GREY  = '94a3b8';
+
+            const headerFont  = { name: 'Courier New', bold: true, size: 10, color: { argb: 'FF' + GOLD } };
+            const titleFont   = { name: 'Courier New', bold: true, size: 14, color: { argb: 'FF' + GOLD } };
+            const subFont     = { name: 'Courier New', size: 9, color: { argb: 'FF' + GREY } };
+            const bodyFont    = { name: 'Courier New', size: 9, color: { argb: 'FF' + WHITE } };
+            const darkFill    = (hex) => ({ type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF' + hex } });
+
+            // ── SHEET 1: PORTFOLIO ──────────────────────────────────────────
+            const ws = workbook.addWorksheet('Portfolio', {
+                properties: { tabColor: { argb: 'FF' + GOLD } }
+            });
+            ws.views = [{ showGridLines: false }];
+
+            // Merge header rows
+            ws.mergeCells('A1:J1');
+            ws.mergeCells('A2:J2');
+            ws.mergeCells('A3:J3');
+
+            const r1 = ws.getCell('A1');
+            r1.value = 'UNMUZZLED TERMINAL';
+            r1.font = titleFont;
+            r1.fill = darkFill(DARK);
+            r1.alignment = { horizontal: 'center', vertical: 'middle' };
+            ws.getRow(1).height = 28;
+
+            const r2 = ws.getCell('A2');
+            r2.value = 'Portfolio Report — ' + new Date().toLocaleDateString('en-GB', { day:'2-digit', month:'long', year:'numeric' });
+            r2.font = subFont;
+            r2.fill = darkFill(DARK);
+            r2.alignment = { horizontal: 'center' };
+            ws.getRow(2).height = 16;
+
+            const r3 = ws.getCell('A3');
+            r3.value = 'Simulated trading terminal. Tactical education only.';
+            r3.font = { ...subFont, italic: true, color: { argb: 'FF334155' } };
+            r3.fill = darkFill(DARK);
+            r3.alignment = { horizontal: 'center' };
+            ws.getRow(3).height = 14;
+
+            // Column headers
+            const cols = ['TICKER','SHARES','AVG PRICE','MKT PRICE','VALUE ($)','P/L ($)','P/L (%)','DIV YIELD','TYPE','FREQUENCY'];
+            const widths = [12, 10, 12, 12, 14, 14, 10, 12, 14, 12];
+            ws.columns = widths.map((w, i) => ({ width: w, key: String.fromCharCode(65+i) }));
+
+            const headerRow = ws.addRow(cols);
+            headerRow.height = 20;
+            headerRow.eachCell(cell => {
+                cell.font = headerFont;
+                cell.fill = darkFill(MID);
+                cell.alignment = { horizontal: 'center', vertical: 'middle' };
+                cell.border = { bottom: { style: 'thin', color: { argb: 'FF' + GOLD } } };
+            });
+
+            // Data rows
             const holdings = localState.holdings || {};
             const prices = localState.customMarketPrices || {};
             const meta = localState.assetMeta || {};
+            let totalEquity = 0;
+            let totalPL = 0;
+            let rowIdx = 0;
 
-            const portfolioRows = [['Ticker', 'Shares', 'Avg Price', 'Market Price', 'Value', 'P/L ($)', 'P/L (%)', 'Dividend Yield', 'Type', 'Frequency']];
             for (const [ticker, h] of Object.entries(holdings)) {
                 const mktPrice = prices[ticker] || h.avgPrice;
                 const value = h.qty * mktPrice;
                 const cost = h.qty * h.avgPrice;
                 const pl = value - cost;
-                const plPct = cost > 0 ? ((pl / cost) * 100).toFixed(2) + '%' : '0%';
+                const plPct = cost > 0 ? ((pl / cost) * 100).toFixed(2) + '%' : '0.00%';
                 const m = meta[ticker] || {};
-                portfolioRows.push([ticker, h.qty, h.avgPrice.toFixed(2), mktPrice.toFixed(2), value.toFixed(2), pl.toFixed(2), plPct, m.yield || '0.00%', m.type || '-', m.freq || '-']);
+                totalEquity += value;
+                totalPL += pl;
+                const bg = rowIdx % 2 === 0 ? DARK2 : DARK;
+                const row = ws.addRow([ticker, h.qty, parseFloat(h.avgPrice.toFixed(2)), parseFloat(mktPrice.toFixed(2)), parseFloat(value.toFixed(2)), parseFloat(pl.toFixed(2)), plPct, m.yield || '0.00%', m.type || '-', m.freq || '-']);
+                row.height = 18;
+                row.eachCell((cell, colNum) => {
+                    cell.font = colNum === 1 ? { ...bodyFont, bold: true, color: { argb: 'FF' + GOLD } } : { ...bodyFont, color: { argb: pl >= 0 && colNum === 6 ? 'FF' + GREEN : (pl < 0 && colNum === 6 ? 'FF' + RED : 'FF' + WHITE) } };
+                    cell.fill = darkFill(bg);
+                    cell.alignment = { horizontal: colNum === 1 ? 'left' : 'right', vertical: 'middle' };
+                });
+                rowIdx++;
             }
-            portfolioRows.push([]);
-            portfolioRows.push(['Liquid Cash', '', '', '', localState.cash.toFixed(2)]);
-            const totalEquity = Object.entries(holdings).reduce((sum, [t, h]) => sum + h.qty * (prices[t] || h.avgPrice), 0);
-            portfolioRows.push(['Total Portfolio Value', '', '', '', (localState.cash + totalEquity).toFixed(2)]);
 
-            const ws1 = XLSX.utils.aoa_to_sheet(portfolioRows);
-            ws1['!cols'] = [14,8,12,12,12,12,10,14,12,12].map(w => ({wch: w}));
-            XLSX.utils.book_append_sheet(wb, ws1, 'Portfolio');
+            // Spacer
+            const spacer = ws.addRow([]);
+            spacer.eachCell(c => c.fill = darkFill(DARK));
 
-            // --- Sheet 2: History ---
-            const historyRows = [['Date', 'Ticker', 'Action', 'Qty', 'Price', 'Total']];
+            // Totals
+            const addTotal = (label, value, color) => {
+                ws.mergeCells(`A${ws.rowCount+1}:D${ws.rowCount+1}`);
+                const row = ws.addRow([label, '', '', '', parseFloat(value.toFixed(2))]);
+                row.height = 18;
+                row.getCell(1).font = { ...headerFont, color: { argb: 'FF' + GREY } };
+                row.getCell(5).font = { name: 'Courier New', bold: true, size: 10, color: { argb: 'FF' + (color || WHITE) } };
+                row.eachCell(c => { c.fill = darkFill(MID); c.alignment = { horizontal: 'right', vertical: 'middle' }; });
+                row.getCell(1).alignment = { horizontal: 'left', vertical: 'middle' };
+            };
+
+            addTotal('LIQUID CASH', localState.cash);
+            addTotal('EQUITY EXPOSURE', totalEquity, GOLD);
+            addTotal('TOTAL PORTFOLIO VALUE', localState.cash + totalEquity, GOLD);
+            addTotal('TOTAL P/L', totalPL, totalPL >= 0 ? GREEN : RED);
+
+            // Dividend Policy note
+            const divPol = document.querySelector('input[name="div-policy"]:checked')?.value || 'reinvest';
+            ws.addRow([]);
+            const policyRow = ws.addRow(['Dividend Policy: ' + (divPol === 'reinvest' ? 'Reinvest Dividends' : 'Receive as Cash')]);
+            policyRow.getCell(1).font = { ...subFont, italic: true };
+            policyRow.getCell(1).fill = darkFill(DARK);
+
+            // ── SHEET 2: HISTORY ──────────────────────────────────────────
+            const ws2 = workbook.addWorksheet('Transaction History', {
+                properties: { tabColor: { argb: 'FF334155' } }
+            });
+            ws2.views = [{ showGridLines: false }];
+            ws2.mergeCells('A1:F1');
+            const h1 = ws2.getCell('A1');
+            h1.value = 'UNMUZZLED TERMINAL — Transaction History';
+            h1.font = { name: 'Courier New', bold: true, size: 12, color: { argb: 'FF' + GOLD } };
+            h1.fill = darkFill(DARK);
+            h1.alignment = { horizontal: 'center', vertical: 'middle' };
+            ws2.getRow(1).height = 24;
+
+            ws2.columns = [22, 12, 10, 8, 14, 14].map(w => ({ width: w }));
+            const hRow2 = ws2.addRow(['DATE', 'TICKER', 'ACTION', 'QTY', 'PRICE ($)', 'TOTAL ($)']);
+            hRow2.height = 20;
+            hRow2.eachCell(cell => {
+                cell.font = headerFont;
+                cell.fill = darkFill(MID);
+                cell.alignment = { horizontal: 'center', vertical: 'middle' };
+                cell.border = { bottom: { style: 'thin', color: { argb: 'FF' + GOLD } } };
+            });
+
+            let idx2 = 0;
             for (const tx of (localState.history || [])) {
-                historyRows.push([new Date(tx.ts).toLocaleString(), tx.ticker, tx.type, tx.qty, tx.price.toFixed(2), (tx.qty * tx.price).toFixed(2)]);
+                const bg2 = idx2 % 2 === 0 ? DARK2 : DARK;
+                const dRow = ws2.addRow([new Date(tx.ts).toLocaleString(), tx.ticker, tx.type, tx.qty, parseFloat(tx.price.toFixed(2)), parseFloat((tx.qty * tx.price).toFixed(2))]);
+                dRow.height = 16;
+                dRow.eachCell((cell, col) => {
+                    cell.font = { ...bodyFont, color: { argb: col === 3 ? (tx.type === 'BUY' ? 'FF' + GREEN : 'FF' + RED) : 'FF' + WHITE } };
+                    cell.fill = darkFill(bg2);
+                    cell.alignment = { horizontal: col === 1 ? 'left' : 'center', vertical: 'middle' };
+                });
+                idx2++;
             }
-            const ws2 = XLSX.utils.aoa_to_sheet(historyRows);
-            ws2['!cols'] = [20,10,8,8,12,14].map(w => ({wch: w}));
-            XLSX.utils.book_append_sheet(wb, ws2, 'History');
+            if (!localState.history?.length) {
+                const emptyRow = ws2.addRow(['No transactions recorded.']);
+                emptyRow.getCell(1).font = { ...subFont, italic: true };
+                emptyRow.getCell(1).fill = darkFill(DARK2);
+            }
 
-            const date = new Date().toISOString().slice(0,10);
-            XLSX.writeFile(wb, `unmuzzled-portfolio-${date}.xlsx`);
+            // Download
+            const buf = await workbook.xlsx.writeBuffer();
+            const blob = new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `unmuzzled-portfolio-${new Date().toISOString().slice(0,10)}.xlsx`;
+            a.click();
+            URL.revokeObjectURL(url);
         };
 
         window.resetPortfolio = async () => {
@@ -262,6 +395,19 @@
             plDisplay.className = `text-lg font-mono font-bold ${totalPL >= 0 ? 'text-green-400' : 'text-red-400'}`;
 
             updateChart(tickers, values, localState.cash);
+
+            // Est. Annual Income
+            const incomeEl = document.getElementById('est-income');
+            if (incomeEl) {
+                let annualIncome = 0;
+                for (const [t, h] of Object.entries(localState.holdings)) {
+                    const price = localState.customMarketPrices?.[t] || h.avgPrice;
+                    const yieldStr = localState.assetMeta?.[t]?.yield || '0%';
+                    const yieldPct = parseFloat(yieldStr.replace('%','')) / 100;
+                    annualIncome += h.qty * price * yieldPct;
+                }
+                incomeEl.innerText = formatCurrency(annualIncome);
+            }
 
             const body = document.getElementById('portfolio-body');
             if (body) {
@@ -482,6 +628,7 @@
                         </button>
                     </div>
                 </div>
+
             </div>
 
             <div class="lg:col-span-8 space-y-6">
@@ -507,6 +654,29 @@
                                 <tbody id="portfolio-body" class="divide-y divide-slate-800/30"></tbody>
                             </table>
                         </div>
+                    </div>
+                </div>
+
+                <div class="glass p-5 rounded-2xl border border-white/5">
+                    <div class="flex items-center justify-between">
+                        <h3 class="text-xs font-black text-[#E9C46A] uppercase tracking-widest font-mono">Dividend Policy</h3>
+                        <span id="est-income" class="text-[#E9C46A] font-mono font-bold text-xs">$0.00 <span class="text-slate-500 font-normal text-[9px]">est. annual</span></span>
+                    </div>
+                    <div class="flex gap-6 mt-3">
+                        <label class="flex items-center gap-2 cursor-pointer">
+                            <input type="radio" name="div-policy" value="reinvest" checked class="accent-[#E9C46A] w-3.5 h-3.5">
+                            <div>
+                                <div class="text-[10px] font-black text-white uppercase tracking-wide">Reinvest Dividends</div>
+                                <div class="text-[9px] text-slate-500">Auto-compound into position</div>
+                            </div>
+                        </label>
+                        <label class="flex items-center gap-2 cursor-pointer">
+                            <input type="radio" name="div-policy" value="cash" class="accent-[#E9C46A] w-3.5 h-3.5">
+                            <div>
+                                <div class="text-[10px] font-black text-white uppercase tracking-wide">Receive as Cash</div>
+                                <div class="text-[9px] text-slate-500">Added to liquid balance</div>
+                            </div>
+                        </label>
                     </div>
                 </div>
 
