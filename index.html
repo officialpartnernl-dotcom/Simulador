@@ -61,13 +61,17 @@
             const tickerInput = document.getElementById('trade-ticker');
             const ticker = tickerInput.value.toUpperCase().trim();
             if (!ticker) return showNotice("Enter a Ticker symbol.");
-            
+
             const status = document.getElementById('price-status');
             status.innerText = "Connecting to Satellite...";
-            
-            const result = await fetchLivePrice(ticker);
-            if (result) {
-                document.getElementById('trade-price').value = result.price.toFixed(2);
+
+            const [priceResult, newsItems] = await Promise.all([
+                fetchLivePrice(ticker),
+                fetchTickerNews(ticker)
+            ]);
+
+            if (priceResult) {
+                document.getElementById('trade-price').value = priceResult.price.toFixed(2);
                 status.innerText = "Price Synchronized";
                 status.classList.add('text-[#CC2020]');
                 setTimeout(() => status.innerText = "", 2000);
@@ -75,7 +79,72 @@
                 status.innerText = "Data Feed Offline. Enter manually.";
                 status.classList.remove('text-[#CC2020]');
             }
+
+            displayIntelFeed(ticker, newsItems);
         };
+
+        async function fetchTickerNews(ticker) {
+            try {
+                const feeds = [
+                    `https://finance.yahoo.com/rss/headline?s=${encodeURIComponent(ticker)}`,
+                    `https://feeds.finance.yahoo.com/rss/2.0/headline?s=${encodeURIComponent(ticker)}&region=US&lang=en-US`
+                ];
+                for (const rssUrl of feeds) {
+                    const apiUrl = `https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(rssUrl)}&count=10`;
+                    const res = await fetch(apiUrl);
+                    if (!res.ok) continue;
+                    const data = await res.json();
+                    if (data.status === 'ok' && data.items?.length) {
+                        return data.items.slice(0, 10);
+                    }
+                }
+                return [];
+            } catch(e) {
+                return [];
+            }
+        }
+
+        function displayIntelFeed(ticker, articles) {
+            const intelBtn = document.getElementById('intel-tab-btn');
+            const intelBody = document.getElementById('intel-body');
+            if (!intelBtn || !intelBody) return;
+
+            if (articles.length > 0) {
+                intelBtn.classList.remove('border-transparent', 'text-gray-400');
+                intelBtn.classList.add('border-green-500', 'text-green-600');
+                const dot = document.getElementById('intel-dot');
+                if (dot) { dot.classList.remove('hidden'); }
+
+                intelBody.innerHTML = `
+                    <div class="px-6 pt-5 pb-2">
+                        <p class="text-xs text-gray-400 uppercase font-black tracking-widest">
+                            ${articles.length} articles found for <span class="text-[#CC2020]">${ticker}</span>
+                        </p>
+                    </div>
+                    ${articles.map(a => {
+                        const date = a.pubDate ? new Date(a.pubDate).toLocaleDateString('en-US', {month:'short', day:'numeric', hour:'2-digit', minute:'2-digit'}) : '';
+                        const clean = a.description ? a.description.replace(/<[^>]+>/g,'').slice(0,160) : '';
+                        return `
+                        <div class="px-6 py-4 border-b border-gray-100 hover:bg-gray-50 transition-colors">
+                            <a href="${a.link}" target="_blank" rel="noopener" class="block">
+                                <p class="text-sm font-bold text-[#1E2D4F] leading-snug mb-1 hover:text-[#CC2020] transition-colors">${a.title}</p>
+                                ${clean ? `<p class="text-xs text-gray-400 leading-relaxed line-clamp-2">${clean}</p>` : ''}
+                                <p class="text-[10px] text-gray-300 mt-1 font-mono">${date} · ${a.author || 'Yahoo Finance'}</p>
+                            </a>
+                        </div>`;
+                    }).join('')}
+                `;
+            } else {
+                intelBtn.classList.remove('border-green-500', 'text-green-600');
+                intelBtn.classList.add('border-transparent', 'text-gray-400');
+                const dot = document.getElementById('intel-dot');
+                if (dot) { dot.classList.add('hidden'); }
+                intelBody.innerHTML = `
+                    <div class="p-12 text-center text-gray-400 italic text-sm">
+                        No recent news found for ${ticker}. Try searching a ticker above.
+                    </div>`;
+            }
+        }
 
         window.syncPortfolioPrices = async () => {
             const tickers = Object.keys(localState.holdings);
@@ -414,25 +483,25 @@
                         <tr class="border-b border-gray-100 hover:bg-gray-50 transition-colors">
                             <td class="px-6 py-4">
                                 <div class="flex items-center gap-2">
-                                    <div class="font-bold text-[#1E2D4F]">${t}</div>
-                                    ${INTEL_TICKERS.includes(t) ? '<span class="text-[7px] bg-[#CC2020]/10 text-[#CC2020] px-1 rounded border border-[#CC2020]/30 font-black">INTEL</span>' : ''}
+                                    <div class="font-bold text-base text-[#1E2D4F]">${t}</div>
+                                    ${INTEL_TICKERS.includes(t) ? '<span class="text-[9px] bg-[#CC2020]/10 text-[#CC2020] px-1.5 rounded border border-[#CC2020]/30 font-black">INTEL</span>' : ''}
                                 </div>
-                                <div class="text-[9px] text-gray-400 uppercase truncate max-w-[100px]">${info.name}</div>
+                                <div class="text-xs text-gray-400 uppercase truncate max-w-[120px]">${info.name}</div>
                             </td>
                             <td class="px-6 py-4">
-                                <div class="text-[10px] font-bold ${info.type === 'Acc.' ? 'text-blue-600' : 'text-[#CC2020]'}">${info.type}</div>
-                                <div class="text-[9px] text-gray-400">${info.freq}</div>
+                                <div class="text-sm font-bold ${info.type === 'Acc.' ? 'text-blue-600' : 'text-[#CC2020]'}">${info.type}</div>
+                                <div class="text-xs text-gray-400">${info.freq}</div>
                             </td>
-                            <td class="px-6 py-4 text-right font-mono text-xs">
+                            <td class="px-6 py-4 text-right font-mono text-sm">
                                 <div class="text-gray-700">${info.yield}</div>
                             </td>
                             <td class="px-6 py-4 text-right">
-                                <div class="font-mono font-bold text-gray-900 text-sm">${formatCurrency(curVal)}</div>
-                                <div class="text-[10px] text-gray-400">${h.qty} units @ ${formatCurrency(marketPrice)}</div>
+                                <div class="font-mono font-bold text-gray-900 text-base">${formatCurrency(curVal)}</div>
+                                <div class="text-xs text-gray-400">${h.qty} units @ ${formatCurrency(marketPrice)}</div>
                             </td>
-                            <td class="px-6 py-4 text-right font-mono text-sm ${pl >= 0 ? 'text-green-700' : 'text-red-700'}">
+                            <td class="px-6 py-4 text-right font-mono text-base ${pl >= 0 ? 'text-green-700' : 'text-red-700'}">
                                 <div>${pl >= 0 ? '▲' : '▼'} ${plP.toFixed(2)}%</div>
-                                <div class="text-[9px] opacity-60">${formatCurrency(pl)}</div>
+                                <div class="text-xs opacity-60">${formatCurrency(pl)}</div>
                             </td>
                         </tr>
                     `;
@@ -498,7 +567,11 @@
         window.switchTab = (tab) => {
             document.querySelectorAll('.tab-content').forEach(c => c.classList.add('hidden'));
             document.getElementById(`tab-${tab}`).classList.remove('hidden');
-            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('border-[#CC2020]', 'text-[#CC2020]'));
+            document.querySelectorAll('.tab-btn').forEach(b => {
+                b.classList.remove('border-[#CC2020]', 'text-[#CC2020]');
+                b.classList.add('border-transparent', 'text-gray-400');
+            });
+            event.currentTarget.classList.remove('border-transparent', 'text-gray-400');
             event.currentTarget.classList.add('border-[#CC2020]', 'text-[#CC2020]');
         };
 
@@ -537,17 +610,17 @@
                     <h1 class="text-2xl font-black tracking-tighter text-[#1E2D4F] uppercase">Unmuzzled <span class="text-[#CC2020]">Terminal</span></h1>
                     <div class="flex items-center gap-2 mt-1">
                         <span class="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse"></span>
-                        <span id="cloud-status" class="text-[9px] uppercase font-black tracking-[0.2em] text-gray-400">Global Sync Active</span>
+                        <span id="cloud-status" class="text-xs uppercase font-black tracking-[0.2em] text-gray-400">Global Sync Active</span>
                     </div>
                 </div>
             </div>
             <div class="flex gap-4">
                 <div class="card px-6 py-4 rounded-2xl border-l-4 border-l-[#CC2020] min-w-[180px]">
-                    <p class="text-[9px] text-gray-400 uppercase font-black mb-1">Portfolio Value</p>
+                    <p class="text-xs text-gray-400 uppercase font-black mb-1">Portfolio Value</p>
                     <p id="net-worth" class="text-xl font-bold font-mono text-[#1E2D4F]">$100,000.00</p>
                 </div>
                 <div class="card px-6 py-4 rounded-2xl border-l-4 border-l-green-500 min-w-[180px]">
-                    <p class="text-[9px] text-gray-400 uppercase font-black mb-1">Total Performance</p>
+                    <p class="text-xs text-gray-400 uppercase font-black mb-1">Total Performance</p>
                     <p id="total-pl" class="text-xl font-bold font-mono text-green-700">+$0.00 (0%)</p>
                 </div>
             </div>
@@ -556,34 +629,34 @@
         <div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
             <div class="lg:col-span-4 space-y-6">
                 <div class="card p-8 rounded-3xl relative overflow-hidden">
-                    <h3 class="text-xs font-black text-gray-400 uppercase tracking-widest mb-8">Asset Allocation</h3>
+                    <h3 class="text-sm font-black text-gray-400 uppercase tracking-widest mb-8">Asset Allocation</h3>
                     <div class="relative h-56">
                         <canvas id="allocationChart"></canvas>
                     </div>
                     <div class="mt-8 space-y-3 border-t border-gray-100 pt-4 text-xs">
                         <div class="flex justify-between">
-                            <span class="text-gray-400 font-bold uppercase tracking-tighter">Liquid Cash</span>
-                            <span id="cash-val" class="font-mono font-bold text-[#1E2D4F]">$100,000.00</span>
+                            <span class="text-sm text-gray-400 font-bold uppercase tracking-tighter">Liquid Cash</span>
+                            <span id="cash-val" class="font-mono font-bold text-sm text-[#1E2D4F]">$100,000.00</span>
                         </div>
                         <div class="flex justify-between">
-                            <span class="text-gray-400 font-bold uppercase tracking-tighter">Equity Exposure</span>
-                            <span id="assets-val" class="font-mono font-bold text-[#1E2D4F]">$0.00</span>
+                            <span class="text-sm text-gray-400 font-bold uppercase tracking-tighter">Equity Exposure</span>
+                            <span id="assets-val" class="font-mono font-bold text-sm text-[#1E2D4F]">$0.00</span>
                         </div>
                     </div>
-                    <button onclick="syncPortfolioPrices()" class="mt-6 w-full text-[10px] font-black uppercase text-[#CC2020] border border-[#CC2020]/30 py-3 rounded-xl hover:bg-[#CC2020]/5 transition-colors flex items-center justify-center gap-2">
-                        <i data-lucide="refresh-cw" class="w-3 h-3"></i> Sync Global Prices
+                    <button onclick="syncPortfolioPrices()" class="mt-6 w-full text-xs font-black uppercase text-[#CC2020] border border-[#CC2020]/30 py-3 rounded-xl hover:bg-[#CC2020]/5 transition-colors flex items-center justify-center gap-2">
+                        <i data-lucide="refresh-cw" class="w-4 h-4"></i> Sync Global Prices
                     </button>
                 </div>
 
                 <div class="card p-8 rounded-3xl">
                     <div class="flex justify-between items-center mb-6">
-                        <h3 class="text-xs font-black text-[#CC2020] uppercase tracking-widest font-mono">Market Order</h3>
-                        <button onclick="toggleCustomFields()" class="text-[9px] text-gray-400 uppercase font-black hover:text-[#1E2D4F]">Dividend Options</button>
+                        <h3 class="text-sm font-black text-[#CC2020] uppercase tracking-widest font-mono">Market Order</h3>
+                        <button onclick="toggleCustomFields()" class="text-xs text-gray-400 uppercase font-black hover:text-[#1E2D4F]">Dividend Options</button>
                     </div>
                     <div class="space-y-4">
                         <div class="flex gap-2">
                             <div class="flex-1">
-                                <label class="text-[9px] font-black text-gray-400 uppercase mb-2 block tracking-widest">Ticker</label>
+                                <label class="text-xs font-black text-gray-400 uppercase mb-2 block tracking-widest">Ticker</label>
                                 <input id="trade-ticker" type="text" placeholder="EX: AAPL" class="w-full p-4 rounded-xl outline-none text-sm font-bold uppercase tracking-widest">
                             </div>
                             <div class="pt-6">
@@ -592,7 +665,7 @@
                                 </button>
                             </div>
                         </div>
-                        <p id="price-status" class="text-[9px] font-bold uppercase text-center h-2 italic text-gray-400"></p>
+                        <p id="price-status" class="text-xs font-bold uppercase text-center h-3 italic text-gray-400"></p>
                         <div id="custom-fields" class="hidden space-y-4 p-4 bg-gray-50 rounded-2xl border border-gray-200">
                             <div class="grid grid-cols-2 gap-3">
                                 <input id="trade-yield" type="text" value="0.00%" class="w-full p-2 rounded-lg text-xs font-mono" placeholder="Yield %">
@@ -607,9 +680,9 @@
                             </select>
                         </div>
                         <div class="grid grid-cols-2 gap-3">
-                            <select id="trade-type" class="p-4 rounded-xl outline-none text-xs font-black uppercase px-4">
-                                <option value="BUY">Buy (Long)</option>
-                                <option value="SELL">Sell (Short)</option>
+                            <select id="trade-type" class="p-4 rounded-xl outline-none text-sm font-black uppercase px-4">
+                                <option value="BUY">Buy</option>
+                                <option value="SELL">Sell</option>
                             </select>
                             <input id="trade-qty" type="number" value="10" class="p-4 rounded-xl outline-none text-center font-mono font-bold">
                         </div>
@@ -624,22 +697,25 @@
 
             <div class="lg:col-span-8 space-y-6">
                 <div class="flex gap-10 border-b border-gray-200 pb-1 overflow-x-auto no-scrollbar">
-                    <button onclick="switchTab('assets')" class="tab-btn px-1 py-4 text-[10px] font-black uppercase tracking-[0.2em] border-b-2 border-[#CC2020] text-[#CC2020] whitespace-nowrap">Asset Custody</button>
-                    <button onclick="switchTab('history')" class="tab-btn px-1 py-4 text-[10px] font-black uppercase tracking-[0.2em] border-b-2 border-transparent text-gray-400 whitespace-nowrap">History</button>
-                    <button onclick="switchTab('intel')" class="tab-btn px-1 py-4 text-[10px] font-black uppercase tracking-[0.2em] border-b-2 border-transparent text-gray-400 whitespace-nowrap">Intel Feed</button>
+                    <button onclick="switchTab('assets')" class="tab-btn px-1 py-4 text-sm font-black uppercase tracking-[0.15em] border-b-2 border-[#CC2020] text-[#CC2020] whitespace-nowrap">Asset Custody</button>
+                    <button onclick="switchTab('history')" class="tab-btn px-1 py-4 text-sm font-black uppercase tracking-[0.15em] border-b-2 border-transparent text-gray-400 whitespace-nowrap">History</button>
+                    <button id="intel-tab-btn" onclick="switchTab('intel')" class="tab-btn px-1 py-4 text-sm font-black uppercase tracking-[0.15em] border-b-2 border-transparent text-gray-400 whitespace-nowrap flex items-center gap-2">
+                        Intel Feed
+                        <span id="intel-dot" class="hidden w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
+                    </button>
                 </div>
 
                 <div id="tab-assets" class="tab-content">
                     <div class="card rounded-3xl overflow-hidden">
                         <div class="overflow-x-auto">
                             <table class="w-full text-sm">
-                                <thead class="text-[9px] text-gray-400 uppercase font-black tracking-widest bg-gray-50 border-b border-gray-100">
+                                <thead class="text-xs text-gray-400 uppercase font-black tracking-wider bg-gray-50 border-b border-gray-100">
                                     <tr>
-                                        <th class="px-6 py-6 text-left">Asset / Intel</th>
-                                        <th class="px-6 py-6 text-left">Policy</th>
-                                        <th class="px-6 py-6 text-right">Div.</th>
-                                        <th class="px-6 py-6 text-right">Value</th>
-                                        <th class="px-6 py-6 text-right">P/L %</th>
+                                        <th class="px-6 py-5 text-left">Asset</th>
+                                        <th class="px-6 py-5 text-left">Policy</th>
+                                        <th class="px-6 py-5 text-right">Div. Yield</th>
+                                        <th class="px-6 py-5 text-right">Value</th>
+                                        <th class="px-6 py-5 text-right">P/L %</th>
                                     </tr>
                                 </thead>
                                 <tbody id="portfolio-body" class="divide-y divide-gray-50"></tbody>
@@ -650,22 +726,22 @@
 
                 <div class="card p-5 rounded-2xl">
                     <div class="flex items-center justify-between">
-                        <h3 class="text-xs font-black text-[#CC2020] uppercase tracking-widest font-mono">Dividend Policy</h3>
-                        <span id="est-income" class="text-[#CC2020] font-mono font-bold text-xs">$0.00 <span class="text-gray-400 font-normal text-[9px]">est. annual</span></span>
+                        <h3 class="text-sm font-black text-[#CC2020] uppercase tracking-widest font-mono">Dividend Policy</h3>
+                        <span id="est-income" class="text-[#CC2020] font-mono font-bold text-sm">$0.00 <span class="text-gray-400 font-normal text-xs">est. annual</span></span>
                     </div>
                     <div class="flex gap-6 mt-3">
                         <label class="flex items-center gap-2 cursor-pointer">
-                            <input type="radio" name="div-policy" value="reinvest" checked class="accent-[#CC2020] w-3.5 h-3.5">
+                            <input type="radio" name="div-policy" value="reinvest" checked class="accent-[#CC2020] w-4 h-4">
                             <div>
-                                <div class="text-[10px] font-black text-gray-800 uppercase tracking-wide">Reinvest Dividends</div>
-                                <div class="text-[9px] text-gray-400">Auto-compound into position</div>
+                                <div class="text-sm font-black text-gray-800 uppercase tracking-wide">Reinvest Dividends</div>
+                                <div class="text-xs text-gray-400">Auto-compound into position</div>
                             </div>
                         </label>
                         <label class="flex items-center gap-2 cursor-pointer">
-                            <input type="radio" name="div-policy" value="cash" class="accent-[#CC2020] w-3.5 h-3.5">
+                            <input type="radio" name="div-policy" value="cash" class="accent-[#CC2020] w-4 h-4">
                             <div>
-                                <div class="text-[10px] font-black text-gray-800 uppercase tracking-wide">Receive as Cash</div>
-                                <div class="text-[9px] text-gray-400">Added to liquid balance</div>
+                                <div class="text-sm font-black text-gray-800 uppercase tracking-wide">Receive as Cash</div>
+                                <div class="text-xs text-gray-400">Added to liquid balance</div>
                             </div>
                         </label>
                     </div>
@@ -677,18 +753,22 @@
                     </div>
                 </div>
 
-                <div id="tab-intel" class="tab-content hidden grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div class="card p-8 rounded-3xl border-l-4 border-l-[#CC2020]">
-                        <h4 class="text-[#1E2D4F] font-black text-xs uppercase mb-3">Strategic Edge</h4>
-                        <p class="text-[11px] text-gray-500 leading-relaxed italic">"Simulated performance depends on active market sync. Use the 'Wipe' function to reset your educational session."</p>
+                <div id="tab-intel" class="tab-content hidden">
+                    <div class="card rounded-3xl overflow-hidden max-h-[600px] overflow-y-auto">
+                        <div id="intel-body" class="divide-y divide-gray-100">
+                            <div class="p-12 text-center text-gray-400 italic text-sm">
+                                Search a ticker above to load news. If articles exist, this tab lights up green.
+                            </div>
+                        </div>
                     </div>
                 </div>
 
-                <div class="flex justify-between items-center px-4">
-                    <span class="text-[9px] font-black uppercase tracking-[0.3em] text-gray-300 italic">Terminal Engine v3.2</span>
+
+<div class="flex justify-between items-center px-4">
+                    <span class="text-xs font-black uppercase tracking-[0.2em] text-gray-300 italic">Terminal Engine v3.2</span>
                     <div class="flex gap-4 items-center">
-                        <button onclick="exportToExcel()" class="text-[9px] text-[#CC2020] hover:text-[#1E2D4F] uppercase font-black tracking-widest transition-all border border-[#CC2020]/30 px-3 py-1.5 rounded-lg hover:bg-gray-50">⬇ Export Excel</button>
-                        <button id="wipe-btn" onclick="resetPortfolio()" data-confirm="false" class="text-[9px] text-gray-300 hover:text-red-600 uppercase font-black tracking-widest transition-all">Wipe Terminal Data</button>
+                        <button onclick="exportToExcel()" class="text-xs text-[#CC2020] hover:text-[#1E2D4F] uppercase font-black tracking-wider transition-all border border-[#CC2020]/30 px-3 py-2 rounded-lg hover:bg-gray-50">⬇ Export Excel</button>
+                        <button id="wipe-btn" onclick="resetPortfolio()" data-confirm="false" class="text-xs text-gray-300 hover:text-red-600 uppercase font-black tracking-wider transition-all">Wipe Terminal Data</button>
                     </div>
                 </div>
             </div>
