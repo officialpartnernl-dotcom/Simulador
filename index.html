@@ -947,9 +947,96 @@
             if (fields) fields.classList.toggle('hidden');
         };
 
+        // ─── TICKER AUTOCOMPLETE (search by company name) ─────────────────
+        let tickerSearchTimer = null;
+        let tickerSuggestionsVisible = false;
+
+        async function searchTickers(query) {
+            try {
+                const r = await fetch(`https://stock-prices.pimpthenet.workers.dev/?search=${encodeURIComponent(query)}`);
+                if (!r.ok) return [];
+                const data = await r.json();
+                return Array.isArray(data?.quotes) ? data.quotes : [];
+            } catch(e) { return []; }
+        }
+
+        function renderSuggestions(items) {
+            const box = document.getElementById('ticker-suggestions');
+            if (!box) return;
+            if (!items.length) { box.classList.add('hidden'); tickerSuggestionsVisible = false; return; }
+            box.innerHTML = items.slice(0, 8).map(q => {
+                const sym = q.symbol || '';
+                const name = q.longname || q.shortname || sym;
+                const exch = q.exchDisp || q.exchange || '';
+                return `<div class="ticker-sugg px-3 py-2 hover:bg-gray-100 cursor-pointer border-b border-gray-100 last:border-0" data-symbol="${sym}">
+                    <div class="flex items-center justify-between gap-2">
+                        <span class="font-mono font-bold text-sm text-[#1E2D4F]">${sym}</span>
+                        <span class="text-[10px] text-gray-400 uppercase">${exch}</span>
+                    </div>
+                    <div class="text-xs text-gray-500 truncate">${name}</div>
+                </div>`;
+            }).join('');
+            box.querySelectorAll('.ticker-sugg').forEach(el => {
+                el.addEventListener('click', () => {
+                    const sym = el.getAttribute('data-symbol');
+                    const input = document.getElementById('trade-ticker');
+                    input.value = sym;
+                    box.classList.add('hidden');
+                    tickerSuggestionsVisible = false;
+                    window.checkPrice();
+                });
+            });
+            box.classList.remove('hidden');
+            tickerSuggestionsVisible = true;
+        }
+
+        function handleTickerInput(e) {
+            const val = e.target.value.trim();
+            clearTimeout(tickerSearchTimer);
+            const box = document.getElementById('ticker-suggestions');
+            // If it looks like a ticker (≤5 chars, all letters), don't auto-search
+            if (val.length < 2) {
+                if (box) box.classList.add('hidden');
+                tickerSuggestionsVisible = false;
+                return;
+            }
+            tickerSearchTimer = setTimeout(async () => {
+                const results = await searchTickers(val);
+                renderSuggestions(results);
+            }, 280);
+        }
+
+        function setupTickerInteractions() {
+            const input = document.getElementById('trade-ticker');
+            const box = document.getElementById('ticker-suggestions');
+            if (!input) return;
+            // Enter triggers search
+            input.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    if (box) box.classList.add('hidden');
+                    tickerSuggestionsVisible = false;
+                    window.checkPrice();
+                } else if (e.key === 'Escape') {
+                    if (box) box.classList.add('hidden');
+                    tickerSuggestionsVisible = false;
+                }
+            });
+            // Autocomplete on typing
+            input.addEventListener('input', handleTickerInput);
+            // Close suggestions on click outside
+            document.addEventListener('click', (ev) => {
+                if (!input.contains(ev.target) && box && !box.contains(ev.target)) {
+                    box.classList.add('hidden');
+                    tickerSuggestionsVisible = false;
+                }
+            });
+        }
+
         window.addEventListener('load', () => {
             if (typeof lucide !== 'undefined') lucide.createIcons();
             applyTranslations();
+            setupTickerInteractions();
         });
     </script>
     <style>
@@ -1127,9 +1214,10 @@
                     </div>
                     <div class="space-y-4">
                         <div class="flex gap-2">
-                            <div class="flex-1">
+                            <div class="flex-1 relative">
                                 <label class="text-xs font-black text-gray-400 uppercase mb-2 block tracking-widest" data-i18n="ticker">Ticker</label>
-                                <input id="trade-ticker" type="text" placeholder="EX: AAPL" data-i18n-placeholder="ticker_ex" class="w-full p-4 rounded-xl outline-none text-sm font-bold uppercase tracking-widest">
+                                <input id="trade-ticker" type="text" placeholder="EX: AAPL or Apple" data-i18n-placeholder="ticker_ex" autocomplete="off" class="w-full p-4 rounded-xl outline-none text-sm font-bold tracking-widest">
+                                <div id="ticker-suggestions" class="hidden absolute left-0 right-0 top-full mt-1 bg-white border border-gray-200 rounded-xl shadow-xl z-30 max-h-72 overflow-y-auto"></div>
                             </div>
                             <div class="pt-6">
                                 <button onclick="checkPrice()" class="h-[52px] px-4 bg-[#1E2D4F] rounded-xl text-white hover:bg-[#2C4070] flex items-center justify-center transition-colors">
