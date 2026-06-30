@@ -366,6 +366,124 @@
             }
         }
 
+        // ─── HYBRID CHART (TradingView for US, Chart.js for international) ───
+        let yahooChartInstance = null;
+        let currentYahooTicker = null;
+        let currentYahooRange = '1mo';
+
+        function isUSTicker(ticker) {
+            if (!ticker) return true;
+            const t = ticker.toUpperCase().trim();
+            // No suffix (.XX or .X) = US (NYSE/NASDAQ); crypto pairs like BTC-USD also pass
+            return !/\.[A-Z]{1,3}$/.test(t);
+        }
+
+        async function fetchHistoryFromWorker(ticker, range) {
+            try {
+                const r = await fetch(`https://stock-prices.pimpthenet.workers.dev/?ticker=${encodeURIComponent(ticker)}&history=${encodeURIComponent(range || '1mo')}`);
+                if (!r.ok) return null;
+                return await r.json();
+            } catch(e) { return null; }
+        }
+
+        async function loadYahooChart(ticker, range) {
+            const meta = document.getElementById('chart-yahoo-meta');
+            const canvas = document.getElementById('ticker-chart-canvas');
+            if (!canvas) return;
+            if (meta) meta.textContent = 'Loading…';
+            const data = await fetchHistoryFromWorker(ticker, range);
+            if (!data || !data.history || !data.history.length) {
+                if (meta) meta.textContent = 'No data available for this ticker.';
+                if (yahooChartInstance) { yahooChartInstance.destroy(); yahooChartInstance = null; }
+                return;
+            }
+            renderYahooChart(canvas, data, range);
+            const last = data.history[data.history.length - 1];
+            const first = data.history[0];
+            const change = last.close - first.close;
+            const changePct = (change / first.close) * 100;
+            const sign = change >= 0 ? '+' : '';
+            const color = change >= 0 ? '#16a34a' : '#dc2626';
+            const cur = data.currency || 'USD';
+            if (meta) meta.innerHTML = `<span class="font-bold text-[#1E2D4F]">${last.close.toFixed(2)} ${cur}</span> <span style="color:${color}">${sign}${change.toFixed(2)} (${sign}${changePct.toFixed(2)}%)</span> · ${data.history.length} pts`;
+        }
+
+        function renderYahooChart(canvas, data, range) {
+            if (yahooChartInstance) yahooChartInstance.destroy();
+            const ctx = canvas.getContext('2d');
+            const closes = data.history.map(p => p.close);
+            const labels = data.history.map(p => p.date);
+            const lastClose = closes[closes.length - 1];
+            const firstClose = closes[0];
+            const isUp = lastClose >= firstClose;
+            const lineColor = isUp ? '#16a34a' : '#dc2626';
+            const fillColor = isUp ? 'rgba(22,163,74,0.1)' : 'rgba(220,38,38,0.1)';
+            yahooChartInstance = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: data.ticker || '',
+                        data: closes,
+                        borderColor: lineColor,
+                        backgroundColor: fillColor,
+                        borderWidth: 2,
+                        fill: true,
+                        tension: 0.25,
+                        pointRadius: 0,
+                        pointHoverRadius: 5,
+                        pointHoverBackgroundColor: lineColor,
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: { mode: 'index', intersect: false },
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            backgroundColor: '#1E2D4F',
+                            titleColor: '#fff',
+                            bodyColor: '#fff',
+                            padding: 10,
+                            displayColors: false,
+                            callbacks: {
+                                title: (items) => items[0].label,
+                                label: (ctx) => `${ctx.parsed.y.toFixed(2)} ${data.currency || 'USD'}`
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            grid: { display: false },
+                            ticks: { color: '#9CA3AF', font: { size: 10 }, maxTicksLimit: 8, maxRotation: 0 }
+                        },
+                        y: {
+                            grid: { color: '#F1F5F9' },
+                            ticks: { color: '#9CA3AF', font: { size: 10 }, callback: (v) => v.toFixed(2) }
+                        }
+                    }
+                }
+            });
+        }
+
+        function setupChartRangeButtons() {
+            document.querySelectorAll('.chart-range-btn').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    const range = btn.getAttribute('data-range');
+                    if (!range || !currentYahooTicker) return;
+                    currentYahooRange = range;
+                    document.querySelectorAll('.chart-range-btn').forEach(b => {
+                        b.classList.remove('bg-[#CC2020]', 'text-white');
+                        b.classList.add('text-gray-400');
+                    });
+                    btn.classList.remove('text-gray-400');
+                    btn.classList.add('bg-[#CC2020]', 'text-white');
+                    loadYahooChart(currentYahooTicker, range);
+                });
+            });
+        }
+
         // Map Yahoo ticker suffixes to TradingView exchange prefixes
         function mapTickerForTradingView(ticker) {
             if (!ticker) return ticker;
@@ -436,16 +554,35 @@
                 status.classList.remove('text-[#CC2020]');
             }
 
-            // Show TradingView chart
+            // Show chart — TradingView for US/crypto, Chart.js for international
             const chartContainer = document.getElementById('chart-container');
-            const chartIframe = document.getElementById('ticker-chart');
             const chartLabel = document.getElementById('chart-ticker-label');
-            if (chartContainer && chartIframe) {
-                const tvLang = (currentLang === 'pt') ? 'br' : currentLang;
-                const tvSymbol = mapTickerForTradingView(ticker);
-                chartIframe.src = `https://s.tradingview.com/widgetembed/?frameElementId=ticker-chart&symbol=${encodeURIComponent(tvSymbol)}&interval=D&hidesidetoolbar=0&hidetoptoolbar=0&symboledit=0&saveimage=0&toolbarbg=f1f3f6&studies=%5B%5D&hideideas=1&theme=light&style=1&timezone=Etc%2FUTC&withdateranges=1&studies_overrides=%7B%7D&overrides=%7B%7D&enabled_features=%5B%5D&disabled_features=%5B%5D&locale=${tvLang}&range=1M`;
+            const sourceLabel = document.getElementById('chart-source-label');
+            const tvWrap = document.getElementById('chart-tv-wrap');
+            const yahooWrap = document.getElementById('chart-yahoo-wrap');
+            if (chartContainer) {
                 chartContainer.classList.remove('hidden');
                 if (chartLabel) chartLabel.textContent = ticker;
+                const isUS = isUSTicker(ticker);
+                if (isUS) {
+                    // TradingView path
+                    if (yahooWrap) yahooWrap.classList.add('hidden');
+                    if (tvWrap) tvWrap.classList.remove('hidden');
+                    if (sourceLabel) { sourceLabel.textContent = 'TradingView'; sourceLabel.classList.remove('hidden'); }
+                    const chartIframe = document.getElementById('ticker-chart');
+                    if (chartIframe) {
+                        const tvLang = (currentLang === 'pt') ? 'br' : currentLang;
+                        const tvSymbol = mapTickerForTradingView(ticker);
+                        chartIframe.src = `https://s.tradingview.com/widgetembed/?frameElementId=ticker-chart&symbol=${encodeURIComponent(tvSymbol)}&interval=D&hidesidetoolbar=0&hidetoptoolbar=0&symboledit=0&saveimage=0&toolbarbg=f1f3f6&studies=%5B%5D&hideideas=1&theme=light&style=1&timezone=Etc%2FUTC&withdateranges=1&studies_overrides=%7B%7D&overrides=%7B%7D&enabled_features=%5B%5D&disabled_features=%5B%5D&locale=${tvLang}&range=1M`;
+                    }
+                } else {
+                    // Yahoo + Chart.js path
+                    if (tvWrap) tvWrap.classList.add('hidden');
+                    if (yahooWrap) yahooWrap.classList.remove('hidden');
+                    if (sourceLabel) { sourceLabel.textContent = 'Yahoo Finance'; sourceLabel.classList.remove('hidden'); }
+                    currentYahooTicker = ticker;
+                    loadYahooChart(ticker, currentYahooRange);
+                }
             }
 
             displayIntelFeed(ticker, newsItems);
@@ -1085,6 +1222,7 @@
             if (typeof lucide !== 'undefined') lucide.createIcons();
             applyTranslations();
             setupTickerInteractions();
+            setupChartRangeButtons();
         });
     </script>
     <style>
@@ -1353,12 +1491,29 @@
                 </div>
 
                 <div id="chart-container" class="hidden card p-5 rounded-2xl">
-                    <div class="flex items-center justify-between mb-3">
+                    <div class="flex items-center justify-between mb-3 gap-2 flex-wrap">
                         <h3 class="text-sm font-black text-[#CC2020] uppercase tracking-widest font-mono" data-i18n="price_chart">Price Chart</h3>
-                        <span id="chart-ticker-label" class="text-xs text-gray-400 font-mono font-bold uppercase"></span>
+                        <div class="flex items-center gap-2">
+                            <span id="chart-source-label" class="text-[9px] text-gray-300 uppercase font-bold tracking-widest hidden"></span>
+                            <span id="chart-ticker-label" class="text-xs text-gray-400 font-mono font-bold uppercase"></span>
+                        </div>
                     </div>
-                    <div class="rounded-xl overflow-hidden border border-gray-200" style="height:520px;background:#F8F9FC;">
+                    <!-- TradingView (US/crypto) -->
+                    <div id="chart-tv-wrap" class="hidden rounded-xl overflow-hidden border border-gray-200" style="height:520px;background:#F8F9FC;">
                         <iframe id="ticker-chart" src="" frameborder="0" allowtransparency="true" scrolling="no" style="width:100%;height:100%;border:0;display:block;"></iframe>
+                    </div>
+                    <!-- Chart.js (EU/Asia/others) -->
+                    <div id="chart-yahoo-wrap" class="hidden rounded-xl border border-gray-200 p-3" style="background:#FFFFFF;">
+                        <div class="flex items-center justify-between mb-2 px-1">
+                            <div id="chart-yahoo-meta" class="text-xs font-mono text-gray-500"></div>
+                            <div class="flex gap-1">
+                                <button data-range="1mo" class="chart-range-btn px-2 py-1 text-[10px] font-black uppercase rounded bg-[#CC2020] text-white">1M</button>
+                                <button data-range="3mo" class="chart-range-btn px-2 py-1 text-[10px] font-black uppercase rounded text-gray-400 hover:text-[#1E2D4F]">3M</button>
+                                <button data-range="6mo" class="chart-range-btn px-2 py-1 text-[10px] font-black uppercase rounded text-gray-400 hover:text-[#1E2D4F]">6M</button>
+                                <button data-range="1y" class="chart-range-btn px-2 py-1 text-[10px] font-black uppercase rounded text-gray-400 hover:text-[#1E2D4F]">1Y</button>
+                            </div>
+                        </div>
+                        <div style="height:470px"><canvas id="ticker-chart-canvas"></canvas></div>
                     </div>
                 </div>
 
