@@ -366,6 +366,53 @@
             }
         }
 
+        // Map Yahoo ticker suffixes to TradingView exchange prefixes
+        function mapTickerForTradingView(ticker) {
+            if (!ticker) return ticker;
+            const t = ticker.toUpperCase().trim();
+            // Suffix → TradingView exchange prefix
+            const suffixMap = [
+                [/\.LS$/, 'EURONEXT:'],   // Lisbon (Portugal)
+                [/\.PA$/, 'EURONEXT:'],   // Paris
+                [/\.AS$/, 'EURONEXT:'],   // Amsterdam
+                [/\.BR$/, 'EURONEXT:'],   // Brussels
+                [/\.DE$/, 'XETR:'],       // Xetra (Germany)
+                [/\.F$/, 'FWB:'],         // Frankfurt
+                [/\.MI$/, 'MIL:'],        // Milan
+                [/\.MC$/, 'BME:'],        // Madrid
+                [/\.SW$/, 'SIX:'],        // Swiss
+                [/\.L$/, 'LSE:'],         // London
+                [/\.IL$/, 'LSE:'],        // London International
+                [/\.OL$/, 'OSL:'],        // Oslo
+                [/\.ST$/, 'OMXSTO:'],     // Stockholm
+                [/\.CO$/, 'OMXCOP:'],     // Copenhagen
+                [/\.HE$/, 'OMXHEX:'],     // Helsinki
+                [/\.VI$/, 'VIE:'],        // Vienna
+                [/\.WA$/, 'GPW:'],        // Warsaw
+                [/\.TO$/, 'TSX:'],        // Toronto
+                [/\.V$/, 'TSXV:'],        // Toronto Venture
+                [/\.HK$/, 'HKEX:'],       // Hong Kong
+                [/\.T$/, 'TSE:'],         // Tokyo
+                [/\.KS$/, 'KRX:'],        // Korea
+                [/\.SS$/, 'SSE:'],        // Shanghai
+                [/\.SZ$/, 'SZSE:'],       // Shenzhen
+                [/\.SA$/, 'BMFBOVESPA:'], // Brazil
+                [/\.MX$/, 'BMV:'],        // Mexico
+                [/\.AX$/, 'ASX:'],        // Australia
+                [/\.NZ$/, 'NZX:'],        // New Zealand
+                [/\.JO$/, 'JSE:'],        // Johannesburg
+                [/\.TA$/, 'TASE:'],       // Tel Aviv
+                [/\.IS$/, 'BIST:'],       // Istanbul
+            ];
+            for (const [re, prefix] of suffixMap) {
+                if (re.test(t)) {
+                    return prefix + t.replace(re, '');
+                }
+            }
+            // No suffix: assume US (NASDAQ/NYSE), TradingView resolves automatically
+            return t;
+        }
+
         window.checkPrice = async () => {
             const tickerInput = document.getElementById('trade-ticker');
             const ticker = tickerInput.value.toUpperCase().trim();
@@ -395,7 +442,8 @@
             const chartLabel = document.getElementById('chart-ticker-label');
             if (chartContainer && chartIframe) {
                 const tvLang = (currentLang === 'pt') ? 'br' : currentLang;
-                chartIframe.src = `https://s.tradingview.com/widgetembed/?frameElementId=ticker-chart&symbol=${encodeURIComponent(ticker)}&interval=D&hidesidetoolbar=0&hidetoptoolbar=0&symboledit=0&saveimage=0&toolbarbg=f1f3f6&studies=%5B%5D&hideideas=1&theme=light&style=1&timezone=Etc%2FUTC&withdateranges=1&studies_overrides=%7B%7D&overrides=%7B%7D&enabled_features=%5B%5D&disabled_features=%5B%5D&locale=${tvLang}&range=1M`;
+                const tvSymbol = mapTickerForTradingView(ticker);
+                chartIframe.src = `https://s.tradingview.com/widgetembed/?frameElementId=ticker-chart&symbol=${encodeURIComponent(tvSymbol)}&interval=D&hidesidetoolbar=0&hidetoptoolbar=0&symboledit=0&saveimage=0&toolbarbg=f1f3f6&studies=%5B%5D&hideideas=1&theme=light&style=1&timezone=Etc%2FUTC&withdateranges=1&studies_overrides=%7B%7D&overrides=%7B%7D&enabled_features=%5B%5D&disabled_features=%5B%5D&locale=${tvLang}&range=1M`;
                 chartContainer.classList.remove('hidden');
                 if (chartLabel) chartLabel.textContent = ticker;
             }
