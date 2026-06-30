@@ -19,7 +19,7 @@
             signOut,
             sendPasswordResetEmail
         } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, doc, setDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { getFirestore, doc, setDoc, getDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         const firebaseConfig = {
             apiKey: "AIzaSyBAXXP2PyJl0uDvsQPw_JLkLJsIooBwKhk",
@@ -37,127 +37,198 @@
 
         const INTEL_TICKERS = ["RTX", "XOM", "NVDA", "GLD", "TSM", "SHEL", "MP"];
 
+        // ============ I18N ============
+        const i18n = {
+            en: {
+                secure_access: 'Secure Access Required', login: 'Login', register: 'Register',
+                email: 'Email', password: 'Password', confirm_password: 'Confirm Password',
+                access_terminal: 'Access Terminal', create_account: 'Create Account', forgot_password: 'Forgot password?',
+                password_create_hint: 'At least 6 characters', password_repeat: 'Repeat password',
+                cloud_sync: 'Cloud Sync Active', portfolio_value: 'Portfolio Value', total_perf: 'Total Performance',
+                logout: 'Logout', asset_allocation: 'Asset Allocation', liquid_cash: 'Liquid Cash',
+                equity_exposure: 'Equity Exposure', sync_prices: 'Sync Global Prices', market_order: 'Market Order',
+                dividend_options: 'Dividend Options', ticker: 'Ticker', transmit_order: 'Transmit Order',
+                buy: 'Buy', sell: 'Sell', asset_custody: 'Asset Custody', history: 'History', intel_feed: 'Intel Feed',
+                asset: 'Asset', policy: 'Policy', div_yield: 'Div. Yield', value: 'Value', pl_pct: 'P/L %',
+                dividend_policy: 'Dividend Policy', est_annual: 'est. annual',
+                reinvest: 'Reinvest Dividends', auto_compound: 'Auto-compound into position',
+                receive_cash: 'Receive as Cash', added_balance: 'Added to liquid balance',
+                export_excel: '⬇ Export Excel', wipe_data: 'Wipe Terminal Data', confirm_purge: 'CONFIRM PURGE?',
+                footer_disclaimer: 'Simulated trading terminal. Tactical education only.',
+                no_assets: 'No assets in custody. Search and Transmit an order to start.',
+                ticker_ex: 'EX: AAPL', exec_price: 'Execution Price',
+                subscription_inactive: 'Subscription Inactive', access_required: 'Access Required',
+                inactive_msg_a: "The account ", inactive_msg_b: " doesn't have an active simulator subscription.",
+                inactive_help: 'If you just purchased, please wait a moment and refresh — activation can take up to 1 minute. If you cancelled or your payment failed, reactivate your subscription to regain access.',
+                subscribe_reactivate: 'Subscribe / Reactivate →', already_sub: 'Already subscribed? Refresh',
+                sign_out: 'Sign out', no_news: 'No recent news found for', articles_found: 'articles found for',
+                authenticating: 'Authenticating...', login_first: 'Please log in first.',
+                review_trade: 'Review trade details.', insufficient_cash: 'Insufficient Liquidity.',
+                insufficient_assets: 'Insufficient assets.', enter_ticker: 'Enter a Ticker symbol.',
+                price_sync: 'Price Synchronized', data_offline: 'Data Feed Offline. Enter manually.',
+                connecting: 'Connecting to Satellite...', syncing: 'Syncing Global Prices...',
+                purged: 'Terminal Data Purged.', err_invalid_email: 'Invalid email address.',
+                err_user_disabled: 'This account has been disabled.', err_no_user: 'No account found with this email.',
+                err_wrong_pass: 'Incorrect password.', err_invalid_cred: 'Incorrect email or password.',
+                err_email_in_use: 'This email is already registered. Try logging in.',
+                err_weak_pass: 'Password must be at least 6 characters.', err_network: 'Network error. Check your connection.',
+                err_too_many: 'Too many attempts. Try again in a few minutes.', err_missing_pass: 'Please enter your password.',
+                err_generic: 'Authentication error. Please try again.', err_enter_both: 'Please enter email and password.',
+                err_passwords_match: 'Passwords do not match.', err_enter_email_first: 'Enter your email above first, then click "Forgot password".',
+                reset_sent: 'Password reset email sent. Check your inbox.', cancel: 'Cancel'
+            },
+            pt: {
+                secure_access: 'Acesso Seguro Necessário', login: 'Entrar', register: 'Registrar',
+                email: 'Email', password: 'Senha', confirm_password: 'Confirmar Senha',
+                access_terminal: 'Acessar Terminal', create_account: 'Criar Conta', forgot_password: 'Esqueceu a senha?',
+                password_create_hint: 'Mínimo 6 caracteres', password_repeat: 'Repetir senha',
+                cloud_sync: 'Sincronização Ativa', portfolio_value: 'Valor do Portfólio', total_perf: 'Performance Total',
+                logout: 'Sair', asset_allocation: 'Alocação de Ativos', liquid_cash: 'Caixa',
+                equity_exposure: 'Exposição em Ações', sync_prices: 'Sincronizar Preços', market_order: 'Ordem de Mercado',
+                dividend_options: 'Opções de Dividendo', ticker: 'Ticker', transmit_order: 'Enviar Ordem',
+                buy: 'Comprar', sell: 'Vender', asset_custody: 'Custódia de Ativos', history: 'Histórico', intel_feed: 'Notícias',
+                asset: 'Ativo', policy: 'Política', div_yield: 'Rendimento', value: 'Valor', pl_pct: 'L/P %',
+                dividend_policy: 'Política de Dividendo', est_annual: 'anual est.',
+                reinvest: 'Reinvestir Dividendos', auto_compound: 'Compor na posição',
+                receive_cash: 'Receber em Caixa', added_balance: 'Adicionado ao saldo líquido',
+                export_excel: '⬇ Exportar Excel', wipe_data: 'Limpar Dados', confirm_purge: 'CONFIRMAR?',
+                footer_disclaimer: 'Terminal simulado. Apenas educação tática.',
+                no_assets: 'Sem ativos em custódia. Pesquise e envie uma ordem para começar.',
+                ticker_ex: 'EX: AAPL', exec_price: 'Preço de Execução',
+                subscription_inactive: 'Assinatura Inativa', access_required: 'Acesso Necessário',
+                inactive_msg_a: 'A conta ', inactive_msg_b: ' não tem assinatura ativa do simulador.',
+                inactive_help: 'Se você acabou de comprar, aguarde um momento e atualize — a ativação pode levar até 1 minuto. Se cancelou ou o pagamento falhou, reative sua assinatura para recuperar o acesso.',
+                subscribe_reactivate: 'Assinar / Reativar →', already_sub: 'Já é assinante? Atualizar',
+                sign_out: 'Sair', no_news: 'Nenhuma notícia recente para', articles_found: 'artigos encontrados para',
+                authenticating: 'Autenticando...', login_first: 'Faça login primeiro.',
+                review_trade: 'Verifique os detalhes da ordem.', insufficient_cash: 'Saldo insuficiente.',
+                insufficient_assets: 'Ativos insuficientes.', enter_ticker: 'Digite um símbolo de ticker.',
+                price_sync: 'Preço Sincronizado', data_offline: 'Feed Offline. Digite manualmente.',
+                connecting: 'Conectando ao Satélite...', syncing: 'Sincronizando Preços Globais...',
+                purged: 'Dados do Terminal Apagados.', err_invalid_email: 'Email inválido.',
+                err_user_disabled: 'Esta conta foi desativada.', err_no_user: 'Nenhuma conta encontrada com este email.',
+                err_wrong_pass: 'Senha incorreta.', err_invalid_cred: 'Email ou senha incorretos.',
+                err_email_in_use: 'Este email já está registrado. Tente fazer login.',
+                err_weak_pass: 'A senha deve ter no mínimo 6 caracteres.', err_network: 'Erro de rede. Verifique sua conexão.',
+                err_too_many: 'Muitas tentativas. Tente novamente em alguns minutos.', err_missing_pass: 'Digite sua senha.',
+                err_generic: 'Erro de autenticação. Tente novamente.', err_enter_both: 'Digite email e senha.',
+                err_passwords_match: 'As senhas não coincidem.', err_enter_email_first: 'Digite seu email acima e clique em "Esqueceu a senha".',
+                reset_sent: 'Email de redefinição enviado. Verifique sua caixa de entrada.', cancel: 'Cancelar'
+            },
+            fr: {
+                secure_access: 'Accès Sécurisé Requis', login: 'Connexion', register: "S'inscrire",
+                email: 'Email', password: 'Mot de passe', confirm_password: 'Confirmer le mot de passe',
+                access_terminal: 'Accéder au Terminal', create_account: 'Créer un compte', forgot_password: 'Mot de passe oublié?',
+                password_create_hint: '6 caractères minimum', password_repeat: 'Répéter le mot de passe',
+                cloud_sync: 'Sync Cloud Actif', portfolio_value: 'Valeur du Portefeuille', total_perf: 'Performance Totale',
+                logout: 'Déconnexion', asset_allocation: "Allocation d'Actifs", liquid_cash: 'Liquidités',
+                equity_exposure: 'Exposition Actions', sync_prices: 'Sync Prix Globaux', market_order: 'Ordre de Marché',
+                dividend_options: 'Options de Dividende', ticker: 'Ticker', transmit_order: "Envoyer l'Ordre",
+                buy: 'Acheter', sell: 'Vendre', asset_custody: "Garde d'Actifs", history: 'Historique', intel_feed: 'Actualités',
+                asset: 'Actif', policy: 'Politique', div_yield: 'Rendement', value: 'Valeur', pl_pct: 'P/P %',
+                dividend_policy: 'Politique de Dividende', est_annual: 'ann. est.',
+                reinvest: 'Réinvestir Dividendes', auto_compound: 'Composer dans la position',
+                receive_cash: 'Recevoir en Liquide', added_balance: 'Ajouté au solde liquide',
+                export_excel: '⬇ Exporter Excel', wipe_data: 'Effacer Données', confirm_purge: 'CONFIRMER?',
+                footer_disclaimer: "Terminal simulé. Éducation tactique uniquement.",
+                no_assets: "Aucun actif en garde. Recherchez et envoyez un ordre pour commencer.",
+                ticker_ex: 'EX: AAPL', exec_price: "Prix d'Exécution",
+                subscription_inactive: 'Abonnement Inactif', access_required: 'Accès Requis',
+                inactive_msg_a: 'Le compte ', inactive_msg_b: " n'a pas d'abonnement actif au simulateur.",
+                inactive_help: "Si vous venez d'acheter, attendez un instant et actualisez — l'activation peut prendre jusqu'à 1 minute. Si vous avez annulé ou si votre paiement a échoué, réactivez votre abonnement pour récupérer l'accès.",
+                subscribe_reactivate: "S'abonner / Réactiver →", already_sub: 'Déjà abonné? Actualiser',
+                sign_out: 'Se déconnecter', no_news: 'Aucune actualité récente pour', articles_found: 'articles trouvés pour',
+                authenticating: "Authentification...", login_first: "Veuillez d'abord vous connecter.",
+                review_trade: "Vérifiez les détails de l'ordre.", insufficient_cash: 'Liquidités insuffisantes.',
+                insufficient_assets: 'Actifs insuffisants.', enter_ticker: 'Saisissez un symbole ticker.',
+                price_sync: 'Prix Synchronisé', data_offline: 'Flux Hors Ligne. Saisir manuellement.',
+                connecting: 'Connexion au Satellite...', syncing: 'Synchronisation des Prix...',
+                purged: 'Données du Terminal Effacées.', err_invalid_email: 'Email invalide.',
+                err_user_disabled: 'Ce compte a été désactivé.', err_no_user: 'Aucun compte trouvé avec cet email.',
+                err_wrong_pass: 'Mot de passe incorrect.', err_invalid_cred: 'Email ou mot de passe incorrect.',
+                err_email_in_use: 'Cet email est déjà enregistré. Essayez de vous connecter.',
+                err_weak_pass: 'Le mot de passe doit comporter au moins 6 caractères.', err_network: 'Erreur réseau. Vérifiez votre connexion.',
+                err_too_many: "Trop de tentatives. Réessayez dans quelques minutes.", err_missing_pass: 'Saisissez votre mot de passe.',
+                err_generic: 'Erreur d\'authentification. Réessayez.', err_enter_both: 'Saisissez email et mot de passe.',
+                err_passwords_match: 'Les mots de passe ne correspondent pas.', err_enter_email_first: "Saisissez d'abord votre email puis cliquez sur \"Mot de passe oublié\".",
+                reset_sent: 'Email de réinitialisation envoyé. Consultez votre boîte de réception.', cancel: 'Annuler'
+            },
+            es: {
+                secure_access: 'Acceso Seguro Requerido', login: 'Iniciar Sesión', register: 'Registrarse',
+                email: 'Email', password: 'Contraseña', confirm_password: 'Confirmar Contraseña',
+                access_terminal: 'Acceder al Terminal', create_account: 'Crear Cuenta', forgot_password: '¿Olvidó la contraseña?',
+                password_create_hint: 'Mínimo 6 caracteres', password_repeat: 'Repetir contraseña',
+                cloud_sync: 'Sincronización Activa', portfolio_value: 'Valor del Portafolio', total_perf: 'Rendimiento Total',
+                logout: 'Cerrar Sesión', asset_allocation: 'Asignación de Activos', liquid_cash: 'Efectivo',
+                equity_exposure: 'Exposición de Capital', sync_prices: 'Sincronizar Precios', market_order: 'Orden de Mercado',
+                dividend_options: 'Opciones de Dividendo', ticker: 'Ticker', transmit_order: 'Enviar Orden',
+                buy: 'Comprar', sell: 'Vender', asset_custody: 'Custodia de Activos', history: 'Historial', intel_feed: 'Noticias',
+                asset: 'Activo', policy: 'Política', div_yield: 'Rendimiento', value: 'Valor', pl_pct: 'G/P %',
+                dividend_policy: 'Política de Dividendo', est_annual: 'anual est.',
+                reinvest: 'Reinvertir Dividendos', auto_compound: 'Auto-componer en la posición',
+                receive_cash: 'Recibir como Efectivo', added_balance: 'Añadido al saldo líquido',
+                export_excel: '⬇ Exportar Excel', wipe_data: 'Borrar Datos', confirm_purge: '¿CONFIRMAR?',
+                footer_disclaimer: 'Terminal simulado. Solo educación táctica.',
+                no_assets: 'Sin activos en custodia. Busque y envíe una orden para comenzar.',
+                ticker_ex: 'EJ: AAPL', exec_price: 'Precio de Ejecución',
+                subscription_inactive: 'Suscripción Inactiva', access_required: 'Acceso Requerido',
+                inactive_msg_a: 'La cuenta ', inactive_msg_b: ' no tiene una suscripción activa al simulador.',
+                inactive_help: 'Si acaba de comprar, espere un momento y actualice — la activación puede tardar hasta 1 minuto. Si canceló o su pago falló, reactive su suscripción para recuperar el acceso.',
+                subscribe_reactivate: 'Suscribirse / Reactivar →', already_sub: '¿Ya suscrito? Actualizar',
+                sign_out: 'Cerrar sesión', no_news: 'Sin noticias recientes para', articles_found: 'artículos encontrados para',
+                authenticating: 'Autenticando...', login_first: 'Por favor inicie sesión primero.',
+                review_trade: 'Verifique los detalles de la orden.', insufficient_cash: 'Liquidez insuficiente.',
+                insufficient_assets: 'Activos insuficientes.', enter_ticker: 'Ingrese un símbolo ticker.',
+                price_sync: 'Precio Sincronizado', data_offline: 'Feed sin conexión. Ingrese manualmente.',
+                connecting: 'Conectando al Satélite...', syncing: 'Sincronizando Precios Globales...',
+                purged: 'Datos del Terminal Borrados.', err_invalid_email: 'Email inválido.',
+                err_user_disabled: 'Esta cuenta ha sido desactivada.', err_no_user: 'No se encontró cuenta con este email.',
+                err_wrong_pass: 'Contraseña incorrecta.', err_invalid_cred: 'Email o contraseña incorrectos.',
+                err_email_in_use: 'Este email ya está registrado. Intente iniciar sesión.',
+                err_weak_pass: 'La contraseña debe tener al menos 6 caracteres.', err_network: 'Error de red. Verifique su conexión.',
+                err_too_many: 'Demasiados intentos. Inténtelo en unos minutos.', err_missing_pass: 'Ingrese su contraseña.',
+                err_generic: 'Error de autenticación. Inténtelo de nuevo.', err_enter_both: 'Ingrese email y contraseña.',
+                err_passwords_match: 'Las contraseñas no coinciden.', err_enter_email_first: 'Ingrese su email arriba y haga clic en "¿Olvidó la contraseña?".',
+                reset_sent: 'Email de restablecimiento enviado. Revise su bandeja de entrada.', cancel: 'Cancelar'
+            }
+        };
+        function detectLang() {
+            const stored = localStorage.getItem('unmuzzled_lang');
+            if (stored && i18n[stored]) return stored;
+            const browser = (navigator.language || 'en').toLowerCase();
+            if (browser.startsWith('pt')) return 'pt';
+            if (browser.startsWith('fr')) return 'fr';
+            if (browser.startsWith('es')) return 'es';
+            return 'en';
+        }
+        let currentLang = detectLang();
+        function t(key) { return (i18n[currentLang] && i18n[currentLang][key]) || i18n.en[key] || key; }
+        function applyTranslations() {
+            document.querySelectorAll('[data-i18n]').forEach(el => { el.textContent = t(el.dataset.i18n); });
+            document.querySelectorAll('[data-i18n-placeholder]').forEach(el => { el.placeholder = t(el.dataset.i18nPlaceholder); });
+            document.querySelectorAll('.lang-btn').forEach(b => {
+                b.classList.toggle('bg-[#CC2020]', b.dataset.lang === currentLang);
+                b.classList.toggle('text-white', b.dataset.lang === currentLang);
+                b.classList.toggle('text-gray-400', b.dataset.lang !== currentLang);
+            });
+        }
+        window.switchLang = (lang) => {
+            if (!i18n[lang]) return;
+            currentLang = lang;
+            localStorage.setItem('unmuzzled_lang', lang);
+            applyTranslations();
+        };
+
         let currentUser = null;
         let unsubscribePortfolio = null;
         let localState = {
-            mode: 'sim', // 'sim' or 'real'
             cash: 100000,
             holdings: {},
             history: [],
             customMarketPrices: {},
-            assetMeta: {},
-            realPortfolio: {
-                positions: {}, // { TICKER: { lots: [{qty, costPrice, buyDate}], meta: {} } }
-                currency: 'USD'
-            }
+            assetMeta: {}
         };
         let allocationChart = null;
-
-        // ─── GEOPOLITICAL THEME MAP ───────────────────────────────────────────
-        const GEO_THEMES = {
-            Defense:    { color:'#CC2020', tickers:['RTX','LMT','NOC','GD','BA','HII','LHX','TXT','RHM.DE','BA.L','SAAB-B.ST','LDO.MI','THL.PA','HO.PA','ITA','XAR'] },
-            Energy:     { color:'#F4A261', tickers:['XOM','CVX','COP','EOG','SHEL','BP','TTE','EQNR','OXY','SLB','HAL','VLO','MPC','PSX','PXD','XLE','OIH'] },
-            Nuclear:    { color:'#9b72cf', tickers:['CCJ','NXE','DNN','URA','URNM','PALAF','NLR','EU','EXC','VST'] },
-            Semis:      { color:'#4e9af1', tickers:['NVDA','TSM','ASML','AMD','INTC','MU','AVGO','QCOM','AMAT','LRCX','KLAC','MRVL','TXN','ON','MCHP','ADI','SOXX','SMH'] },
-            RareEarths: { color:'#52b788', tickers:['MP','LYC.AX','USAS','REMX','TMRC','UUUU','ENR.AX','ILU.AX'] },
-            Gold:       { color:'#C9A84C', tickers:['GLD','IAU','SLV','GDX','GDXJ','NEM','GOLD','AEM','FNV','WPM','KGC','AU','GFI','SBSW'] },
-            China:      { color:'#E63946', tickers:['BABA','JD','PDD','NIO','TCEHY','BIDU','LI','XPEV','NTES','TME','BILI','MCHI','KWEB','FXI','ASHR'] },
-            Cyber:      { color:'#2ec4b6', tickers:['CRWD','PANW','ZS','FTNT','CYBR','S','OKTA','NET','TENB','CHKP','HACK','CIBR'] },
-        };
-        function getTickerThemes(ticker) {
-            const t = ticker.toUpperCase();
-            return Object.entries(GEO_THEMES).filter(([_,v]) => v.tickers.includes(t)).map(([k]) => k);
-        }
-
-        // ─── PRICE HISTORY (30d sparkline) ─────────────────────────────────
-        let tradeSparkChart = null;
-        let rpSparkChart = null;
-
-        async function fetchPriceHistory(ticker) {
-            console.log('[sparkline] fetching history for', ticker);
-            // 1) Try own worker with history param (extend the worker to support this for best reliability)
-            try {
-                const r = await fetch(`https://stock-prices.pimpthenet.workers.dev/?ticker=${encodeURIComponent(ticker)}&history=1mo`);
-                console.log('[sparkline] worker response status:', r.status);
-                if (r.ok) {
-                    const data = await r.json();
-                    if (data && Array.isArray(data.history) && data.history.length >= 2) {
-                        return {
-                            labels: data.history.map(p => p.date || p.t || ''),
-                            prices: data.history.map(p => Number(p.close ?? p.c ?? p.price))
-                        };
-                    }
-                }
-            } catch(e) {}
-            // 2) Fallback: Stooq CSV (public, CORS-friendly, no key — limited to US-listed tickers)
-            try {
-                const t = ticker.toLowerCase().replace(/\..*/, '') + '.us';
-                const url = `https://stooq.com/q/d/l/?s=${t}&i=d`;
-                console.log('[sparkline] trying Stooq:', url);
-                const r = await fetch(url);
-                console.log('[sparkline] Stooq response status:', r.status);
-                if (!r.ok) throw 0;
-                const csv = await r.text();
-                const lines = csv.trim().split('\n').slice(1);
-                const all = lines.map(l => l.split(',')).filter(c => c.length >= 5 && !isNaN(parseFloat(c[4])));
-                if (all.length < 5) throw 0;
-                const last = all.slice(-30);
-                return {
-                    labels: last.map(c => c[0]),
-                    prices: last.map(c => parseFloat(c[4]))
-                };
-            } catch(e) { console.warn('[sparkline] Stooq failed:', e); }
-            console.warn('[sparkline] no history data available — extend your worker to support &history=1mo');
-            return null;
-        }
-
-        function renderTickerSparkline(canvasId, wrapId, labelId, changeId, ticker, hist, existingChart) {
-            const wrap = document.getElementById(wrapId);
-            const labelEl = document.getElementById(labelId);
-            const changeEl = document.getElementById(changeId);
-            const canvas = document.getElementById(canvasId);
-            if (!hist || !hist.prices || hist.prices.length < 2) {
-                if (wrap) wrap.classList.add('hidden');
-                return existingChart;
-            }
-            if (existingChart) existingChart.destroy();
-            const first = hist.prices[0];
-            const last = hist.prices[hist.prices.length - 1];
-            const change = last - first;
-            const changePct = (change / first) * 100;
-            const isUp = change >= 0;
-            const color = isUp ? '#16a34a' : '#dc2626';
-            const fillColor = isUp ? 'rgba(22,163,74,0.1)' : 'rgba(220,38,38,0.1)';
-
-            labelEl.textContent = `${ticker} · ${t8('last_30d')}`;
-            changeEl.textContent = `${isUp ? '+' : ''}${changePct.toFixed(2)}%`;
-            changeEl.className = `text-[10px] font-mono font-bold ${isUp ? 'text-green-600' : 'text-red-600'}`;
-            wrap.classList.remove('hidden');
-
-            const ctx = canvas.getContext('2d');
-            return new Chart(ctx, {
-                type: 'line',
-                data: {
-                    labels: hist.labels,
-                    datasets: [{
-                        data: hist.prices,
-                        borderColor: color,
-                        backgroundColor: fillColor,
-                        borderWidth: 2,
-                        pointRadius: 0,
-                        tension: 0.3,
-                        fill: true
-                    }]
-                },
-                options: {
-                    responsive: true, maintainAspectRatio: false,
-                    plugins: { legend: { display: false }, tooltip: { enabled: false } },
-                    scales: { x: { display: false }, y: { display: false } },
-                    elements: { line: { cubicInterpolationMode: 'monotone' } }
-                }
-            });
-        }
-
 
         const parseSmartFloat = (val) => {
             if (!val) return NaN;
@@ -167,18 +238,18 @@
 
         function friendlyAuthError(code) {
             const map = {
-                'auth/invalid-email': 'Invalid email address.',
-                'auth/user-disabled': 'This account has been disabled.',
-                'auth/user-not-found': 'No account found with this email.',
-                'auth/wrong-password': 'Incorrect password.',
-                'auth/invalid-credential': 'Incorrect email or password.',
-                'auth/email-already-in-use': 'This email is already registered. Try logging in.',
-                'auth/weak-password': 'Password must be at least 6 characters.',
-                'auth/network-request-failed': 'Network error. Check your connection.',
-                'auth/too-many-requests': 'Too many attempts. Try again in a few minutes.',
-                'auth/missing-password': 'Please enter your password.'
+                'auth/invalid-email': 'err_invalid_email',
+                'auth/user-disabled': 'err_user_disabled',
+                'auth/user-not-found': 'err_no_user',
+                'auth/wrong-password': 'err_wrong_pass',
+                'auth/invalid-credential': 'err_invalid_cred',
+                'auth/email-already-in-use': 'err_email_in_use',
+                'auth/weak-password': 'err_weak_pass',
+                'auth/network-request-failed': 'err_network',
+                'auth/too-many-requests': 'err_too_many',
+                'auth/missing-password': 'err_missing_pass'
             };
-            return map[code] || 'Authentication error. Please try again.';
+            return t(map[code] || 'err_generic');
         }
 
         function showAuthError(msg) {
@@ -227,7 +298,7 @@
             clearAuthError();
             const email = document.getElementById('login-email').value.trim();
             const password = document.getElementById('login-password').value;
-            if (!email || !password) return showAuthError('Please enter email and password.');
+            if (!email || !password) return showAuthError(t('err_enter_both'));
             try {
                 setAuthBusy(true);
                 await signInWithEmailAndPassword(auth, email, password);
@@ -243,9 +314,9 @@
             const email = document.getElementById('register-email').value.trim();
             const password = document.getElementById('register-password').value;
             const confirm = document.getElementById('register-confirm').value;
-            if (!email || !password) return showAuthError('Please enter email and password.');
-            if (password.length < 6) return showAuthError('Password must be at least 6 characters.');
-            if (password !== confirm) return showAuthError('Passwords do not match.');
+            if (!email || !password) return showAuthError(t('err_enter_both'));
+            if (password.length < 6) return showAuthError(t('err_weak_pass'));
+            if (password !== confirm) return showAuthError(t('err_passwords_match'));
             try {
                 setAuthBusy(true);
                 await createUserWithEmailAndPassword(auth, email, password);
@@ -259,10 +330,10 @@
         window.doForgotPassword = async () => {
             clearAuthError();
             const email = document.getElementById('login-email').value.trim();
-            if (!email) return showAuthError('Enter your email above first, then click "Forgot password".');
+            if (!email) return showAuthError(t('err_enter_email_first'));
             try {
                 await sendPasswordResetEmail(auth, email);
-                showAuthInfo('Password reset email sent. Check your inbox.');
+                showAuthInfo(t('reset_sent'));
             } catch (e) {
                 showAuthError(friendlyAuthError(e.code));
             }
@@ -298,10 +369,10 @@
         window.checkPrice = async () => {
             const tickerInput = document.getElementById('trade-ticker');
             const ticker = tickerInput.value.toUpperCase().trim();
-            if (!ticker) return showNotice("Enter a Ticker symbol.");
+            if (!ticker) return showNotice(t('enter_ticker'));
 
             const status = document.getElementById('price-status');
-            status.innerText = "Connecting to Satellite...";
+            status.innerText = t('connecting');
 
             const [priceResult, newsItems] = await Promise.all([
                 fetchLivePrice(ticker),
@@ -310,29 +381,37 @@
 
             if (priceResult) {
                 document.getElementById('trade-price').value = priceResult.price.toFixed(2);
-                status.innerText = t8('price_synced');
+                status.innerText = t('price_sync');
                 status.classList.add('text-[#CC2020]');
                 setTimeout(() => status.innerText = "", 2000);
             } else {
-                status.innerText = t8('data_offline');
+                status.innerText = t('data_offline');
                 status.classList.remove('text-[#CC2020]');
             }
 
-            // Fetch 30d history and render sparkline
-            fetchPriceHistory(ticker).then(hist => {
-                tradeSparkChart = renderTickerSparkline('trade-spark', 'trade-spark-wrap', 'trade-spark-label', 'trade-spark-change', ticker, hist, tradeSparkChart);
-            });
+            // Show TradingView chart
+            const chartContainer = document.getElementById('chart-container');
+            const chartIframe = document.getElementById('ticker-chart');
+            const chartLabel = document.getElementById('chart-ticker-label');
+            if (chartContainer && chartIframe) {
+                const tvLang = (currentLang === 'pt') ? 'br' : currentLang;
+                chartIframe.src = `https://s.tradingview.com/widgetembed/?frameElementId=ticker-chart&symbol=${encodeURIComponent(ticker)}&interval=D&hidesidetoolbar=0&hidetoptoolbar=0&symboledit=0&saveimage=0&toolbarbg=f1f3f6&studies=%5B%5D&hideideas=1&theme=light&style=1&timezone=Etc%2FUTC&withdateranges=1&studies_overrides=%7B%7D&overrides=%7B%7D&enabled_features=%5B%5D&disabled_features=%5B%5D&locale=${tvLang}&range=1M`;
+                chartContainer.classList.remove('hidden');
+                if (chartLabel) chartLabel.textContent = ticker;
+            }
 
             displayIntelFeed(ticker, newsItems);
         };
 
         async function fetchTickerNews(ticker) {
             try {
-                const feeds = [
-                    `https://finance.yahoo.com/rss/headline?s=${encodeURIComponent(ticker)}`,
-                    `https://feeds.finance.yahoo.com/rss/2.0/headline?s=${encodeURIComponent(ticker)}&region=US&lang=en-US`
+                const queries = [
+                    `${ticker} stock`,
+                    `${ticker} share price`,
+                    `${ticker}`
                 ];
-                for (const rssUrl of feeds) {
+                for (const q of queries) {
+                    const rssUrl = `https://news.google.com/rss/search?q=${encodeURIComponent(q)}&hl=en-US&gl=US&ceid=US:en`;
                     const apiUrl = `https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(rssUrl)}&count=10`;
                     const res = await fetch(apiUrl);
                     if (!res.ok) continue;
@@ -361,7 +440,7 @@
                 intelBody.innerHTML = `
                     <div class="px-6 pt-5 pb-2">
                         <p class="text-xs text-gray-400 uppercase font-black tracking-widest">
-                            ${articles.length} articles found for <span class="text-[#CC2020]">${ticker}</span>
+                            ${articles.length} ${t('articles_found')} <span class="text-[#CC2020]">${ticker}</span>
                         </p>
                     </div>
                     ${articles.map(a => {
@@ -372,7 +451,7 @@
                             <a href="${a.link}" target="_blank" rel="noopener" class="block">
                                 <p class="text-sm font-bold text-[#1E2D4F] leading-snug mb-1 hover:text-[#CC2020] transition-colors">${a.title}</p>
                                 ${clean ? `<p class="text-xs text-gray-400 leading-relaxed line-clamp-2">${clean}</p>` : ''}
-                                <p class="text-[10px] text-gray-300 mt-1 font-mono">${date} · ${a.author || 'Yahoo Finance'}</p>
+                                <p class="text-[10px] text-gray-300 mt-1 font-mono">${date} · ${a.author || a.source?.title || 'Google News'}</p>
                             </a>
                         </div>`;
                     }).join('')}
@@ -384,7 +463,7 @@
                 if (dot) { dot.classList.add('hidden'); }
                 intelBody.innerHTML = `
                     <div class="p-12 text-center text-gray-400 italic text-sm">
-                        No recent news found for ${ticker}. Try searching a ticker above.
+                        ${t('no_news')} ${ticker}.
                     </div>`;
             }
         }
@@ -393,7 +472,7 @@
             const tickers = Object.keys(localState.holdings);
             if (tickers.length === 0) return;
 
-            showNotice("Syncing Global Prices...");
+            showNotice(t('syncing'));
             for (const ticker of tickers) {
                 const data = await fetchLivePrice(ticker);
                 if (data) {
@@ -405,7 +484,7 @@
         };
 
         window.executeTrade = async () => {
-            if (!currentUser) return showNotice("Please log in first.");
+            if (!currentUser) return showNotice(t('login_first'));
 
             const tickerInput = document.getElementById('trade-ticker').value.toUpperCase().trim();
             const type = document.getElementById('trade-type').value;
@@ -413,14 +492,14 @@
             const price = parseSmartFloat(document.getElementById('trade-price').value);
 
             if (!tickerInput || isNaN(qty) || isNaN(price) || qty <= 0) {
-                return showNotice("Review trade details.");
+                return showNotice(t('review_trade'));
             }
 
             const totalCost = qty * price;
             let newState = JSON.parse(JSON.stringify(localState));
 
             if (type === 'BUY') {
-                if (totalCost > newState.cash) return showNotice("Insufficient Liquidity.");
+                if (totalCost > newState.cash) return showNotice(t('insufficient_cash'));
                 newState.cash -= totalCost;
 
                 if (!newState.holdings[tickerInput]) {
@@ -440,7 +519,7 @@
                 newState.customMarketPrices[tickerInput] = price;
             } else {
                 if (!newState.holdings[tickerInput] || newState.holdings[tickerInput].qty < qty) {
-                    return showNotice("Insufficient assets.");
+                    return showNotice(t('insufficient_assets'));
                 }
                 newState.cash += totalCost;
                 newState.holdings[tickerInput].qty -= qty;
@@ -638,11 +717,11 @@
             const btn = document.getElementById('wipe-btn');
             if (btn.getAttribute('data-confirm') === 'false') {
                 btn.setAttribute('data-confirm', 'true');
-                btn.innerText = "CONFIRM PURGE?";
+                btn.innerText = t('confirm_purge');
                 btn.classList.add('text-red-600');
                 setTimeout(() => {
                     btn.setAttribute('data-confirm', 'false');
-                    btn.innerText = "Wipe Terminal Data";
+                    btn.innerText = t('wipe_data');
                     btn.classList.remove('text-red-600');
                 }, 3000);
                 return;
@@ -651,9 +730,9 @@
             const cleanState = { cash: 100000, holdings: {}, history: [], customMarketPrices: {}, assetMeta: {} };
             localState = cleanState;
             await saveToCloud(cleanState);
-            showNotice("Terminal Data Purged.");
+            showNotice(t('purged'));
             btn.setAttribute('data-confirm', 'false');
-            btn.innerText = "Wipe Terminal Data";
+            btn.innerText = t('wipe_data');
             btn.classList.remove('text-red-600');
             updateUI();
         };
@@ -663,29 +742,9 @@
             unsubscribePortfolio = onSnapshot(userDoc, (docSnap) => {
                 if (docSnap.exists()) {
                     localState = docSnap.data();
-                    // Backfill new fields for older docs
-                    if (!localState.mode) localState.mode = 'sim';
-                    if (!localState.realPortfolio) localState.realPortfolio = { positions:{}, currency:'USD' };
                 } else {
                     setDoc(userDoc, localState).catch(err => console.error('Init portfolio failed', err));
                 }
-                // Sync UI to stored mode
-                if (typeof window.setMode === 'function' && localState.mode) {
-                    const simBtn = document.getElementById('mode-sim-btn');
-                    const realBtn = document.getElementById('mode-real-btn');
-                    const kpiLabel = document.getElementById('kpi-value-label');
-                    if (localState.mode === 'real') {
-                        realBtn?.classList.add('bg-[#CC2020]','text-white'); realBtn?.classList.remove('text-gray-400');
-                        simBtn?.classList.remove('bg-[#CC2020]','text-white'); simBtn?.classList.add('text-gray-400');
-                        if (kpiLabel) kpiLabel.textContent = 'Portfolio Value (Real)';
-                    } else {
-                        simBtn?.classList.add('bg-[#CC2020]','text-white'); simBtn?.classList.remove('text-gray-400');
-                        realBtn?.classList.remove('bg-[#CC2020]','text-white'); realBtn?.classList.add('text-gray-400');
-                    }
-                    document.querySelectorAll('[data-mode="sim"]').forEach(el => el.classList.toggle('hidden', localState.mode !== 'sim'));
-                    document.querySelectorAll('[data-mode="real"]').forEach(el => el.classList.toggle('hidden', localState.mode !== 'real'));
-                }
-                applySimTranslations();
                 updateUI();
             }, (err) => {
                 console.error("Sync error:", err);
@@ -693,31 +752,49 @@
             });
         }
 
-        
-        // Apply translations on page load (before auth)
-        document.addEventListener('DOMContentLoaded', () => { applySimTranslations(); });
+        async function checkSubscription(email) {
+            try {
+                const subDoc = doc(db, 'subscriptions', email.toLowerCase().trim());
+                const snap = await getDoc(subDoc);
+                if (!snap.exists()) return false;
+                return snap.data().active === true;
+            } catch (e) {
+                console.error('Subscription check failed', e);
+                return false;
+            }
+        }
 
-        onAuthStateChanged(auth, (user) => {
+        function showScreen(which) {
+            ['auth-screen', 'subscription-screen', 'app-screen'].forEach(id => {
+                const el = document.getElementById(id);
+                if (el) el.classList.toggle('hidden', id !== which);
+            });
+        }
+
+        onAuthStateChanged(auth, async (user) => {
             currentUser = user;
-            const authScreen = document.getElementById('auth-screen');
-            const appScreen = document.getElementById('app-screen');
             if (user) {
-                authScreen.classList.add('hidden');
-                appScreen.classList.remove('hidden');
-                document.getElementById('user-email').innerText = user.email || '';
-                localState = { mode:'sim', cash: 100000, holdings: {}, history: [], customMarketPrices: {}, assetMeta: {}, realPortfolio: { positions:{}, currency:'USD' } };
-                if (unsubscribePortfolio) unsubscribePortfolio();
-                attachPortfolioListener(user.uid);
-                setTimeout(() => { if (currentUser) syncPortfolioPrices(); }, 1500);
+                const isActive = await checkSubscription(user.email);
+                if (isActive) {
+                    showScreen('app-screen');
+                    document.getElementById('user-email').innerText = user.email || '';
+                    document.getElementById('user-email-inactive').innerText = user.email || '';
+                    localState = { cash: 100000, holdings: {}, history: [], customMarketPrices: {}, assetMeta: {} };
+                    if (unsubscribePortfolio) unsubscribePortfolio();
+                    attachPortfolioListener(user.uid);
+                    setTimeout(() => { if (currentUser) syncPortfolioPrices(); }, 1500);
+                } else {
+                    showScreen('subscription-screen');
+                    document.getElementById('user-email-inactive').innerText = user.email || '';
+                    if (unsubscribePortfolio) { unsubscribePortfolio(); unsubscribePortfolio = null; }
+                }
             } else {
-                authScreen.classList.remove('hidden');
-                appScreen.classList.add('hidden');
+                showScreen('auth-screen');
                 if (unsubscribePortfolio) { unsubscribePortfolio(); unsubscribePortfolio = null; }
             }
         });
 
         function updateUI() {
-            if (localState.mode === 'real') { updateRealUI(); return; }
             const netWorthEl = document.getElementById('net-worth');
             const cashValEl = document.getElementById('cash-val');
             const assetsValEl = document.getElementById('assets-val');
@@ -798,7 +875,7 @@
                 }).join('');
 
                 if (tickers.length === 0) {
-                    body.innerHTML = '<tr><td colspan="5" class="p-12 text-center text-gray-400 italic">No assets in custody. Search and Transmit an order to start.</td></tr>';
+                    body.innerHTML = `<tr><td colspan="5" class="p-12 text-center text-gray-400 italic">${t('no_assets')}</td></tr>`;
                 }
             }
 
@@ -854,432 +931,6 @@
             }
         }
 
-
-
-        // ─── I18N ──────────────────────────────────────────────────────────
-        const STR = {
-            en: {
-                cloud_sync:'Cloud Sync Active', logout:'Logout',
-                asset_allocation:'Asset Allocation', liquid_cash:'Liquid Cash', equity_exposure:'Equity Exposure',
-                sync_global_prices:'Sync Global Prices', market_order:'Market Order', dividend_options:'Dividend Options',
-                transmit_order:'Transmit Order', tab_assets:'Asset Custody', tab_history:'History', tab_intel:'Intel Feed',
-                th_asset_sim:'Asset', th_policy:'Policy', th_yield:'Div. Yield', th_value:'Value', th_pl_sim:'P/L %',
-                terminal_engine:'Terminal Engine v3.2', export_excel:'Export Excel', wipe_data:'Wipe Terminal Data',
-                footer_brand:'Unmuzzled Intelligence Systems', footer_disclaimer:'Simulated trading terminal. Tactical education only.',
-                add_position:'Add Position', lbl_ticker:'Ticker', lbl_qty:'Quantity', lbl_cost:'Cost / share',
-                lbl_date:'Buy Date', optional:'(optional)', add_to_portfolio:'Add to Portfolio',
-                tab_holdings:'Holdings', th_asset:'Asset', th_qty:'Qty', th_avg_cost:'Avg Cost',
-                th_mkt_price:'Mkt Price', th_mkt_value:'Mkt Value', th_pl:'P/L',
-                total:'TOTAL', cost_basis:'Cost basis:', geo_exposure:'Geopolitical Exposure',
-                sync_prices:'Sync Prices', no_positions:'Add positions to see your thematic exposure.',
-                enter_ticker:'Enter a Ticker symbol.', connecting:'Connecting to Satellite...',
-                price_synced:'Price Synchronized', data_offline:'Data Feed Offline. Enter manually.',
-                review_details:'Review position details.', position_added:'{0} added to portfolio.',
-                save_error:'Could not save. Check connection.', syncing:'Syncing global prices...',
-                lot:'lot', lots:'lots', no_positions_long:'No positions yet. Add one to start tracking.',
-                remove_last_lot:'Remove last lot',
-                theme_defense:'Defense', theme_energy:'Energy', theme_nuclear:'Nuclear', theme_semis:'Semis',
-                theme_rareearths:'Rare Earths', theme_gold:'Gold', theme_china:'China', theme_cyber:'Cyber', theme_other:'Other',
-                last_30d:'Last 30 days', starting_cash:'Starting Cash', apply:'Apply',
-                starting_cash_hint:'Resets holdings, sets new cash balance.',
-                save_now:'Save Now', saving:'Saving...', saved_locally:'Saved locally (sign in for cloud sync)',
-                saved_at:'Saved at', invalid_amount:'Enter an amount of at least 100.',
-                login_first:'Please log in first.', confirm_reset_with_cash:'Reset portfolio with {0} starting cash?',
-                cash_set:'Starting cash set to {0}.', kpi_value_sim:'Portfolio Value', kpi_value_real:'Portfolio Value (Real)',
-                mode_sim:'Simulator', mode_real:'Real Portfolio',
-            },
-            fr: {
-                cloud_sync:'Sync Cloud Actif', logout:'Déconnexion',
-                asset_allocation:"Allocation d'Actifs", liquid_cash:'Liquidités', equity_exposure:'Exposition Actions',
-                sync_global_prices:'Sync Prix Globaux', market_order:'Ordre de Marché', dividend_options:'Options Dividendes',
-                transmit_order:"Transmettre l'Ordre", tab_assets:'Détention', tab_history:'Historique', tab_intel:'Intel Feed',
-                th_asset_sim:'Actif', th_policy:'Politique', th_yield:'Rend. Div.', th_value:'Valeur', th_pl_sim:'P/L %',
-                terminal_engine:'Terminal Engine v3.2', export_excel:'Exporter Excel', wipe_data:'Effacer Données',
-                footer_brand:'Unmuzzled Intelligence Systems', footer_disclaimer:'Terminal de simulation. Éducation tactique uniquement.',
-                add_position:'Ajouter Position', lbl_ticker:'Symbole', lbl_qty:'Quantité', lbl_cost:'Coût / action',
-                lbl_date:"Date d'achat", optional:'(optionnel)', add_to_portfolio:'Ajouter au Portefeuille',
-                tab_holdings:'Positions', th_asset:'Actif', th_qty:'Qté', th_avg_cost:'Coût Moy.',
-                th_mkt_price:'Prix Marché', th_mkt_value:'Val. Marché', th_pl:'P/L',
-                total:'TOTAL', cost_basis:'Coût total :', geo_exposure:'Exposition Géopolitique',
-                sync_prices:'Sync Prix', no_positions:'Ajoutez des positions pour voir votre exposition.',
-                enter_ticker:'Entrez un symbole.', connecting:'Connexion au satellite...',
-                price_synced:'Prix synchronisé', data_offline:'Flux hors ligne. Entrée manuelle.',
-                review_details:'Vérifiez les détails.', position_added:'{0} ajouté au portefeuille.',
-                save_error:'Sauvegarde échouée. Vérifiez la connexion.', syncing:'Synchronisation des prix...',
-                lot:'lot', lots:'lots', no_positions_long:'Aucune position. Ajoutez-en une pour commencer.',
-                remove_last_lot:'Supprimer le dernier lot',
-                theme_defense:'Défense', theme_energy:'Énergie', theme_nuclear:'Nucléaire', theme_semis:'Semi-conducteurs',
-                theme_rareearths:'Terres Rares', theme_gold:'Or', theme_china:'Chine', theme_cyber:'Cyber', theme_other:'Autre',
-                last_30d:'30 derniers jours', starting_cash:'Capital initial', apply:'Appliquer',
-                starting_cash_hint:'Remet à zéro les positions et définit le nouveau solde.',
-                save_now:'Enregistrer', saving:'Sauvegarde...', saved_locally:'Sauvegardé localement (connectez-vous pour le cloud)',
-                saved_at:'Sauvegardé à', invalid_amount:'Entrez un montant d\u2019au moins 100.',
-                login_first:'Connectez-vous d\u2019abord.', confirm_reset_with_cash:'Réinitialiser le portefeuille avec {0} de capital ?',
-                cash_set:'Capital initial défini à {0}.', kpi_value_sim:'Valeur Portefeuille', kpi_value_real:'Valeur Portefeuille (Réel)',
-                mode_sim:'Simulateur', mode_real:'Portefeuille Réel',
-            },
-            'pt-br': {
-                cloud_sync:'Sync na Nuvem Ativo', logout:'Sair',
-                asset_allocation:'Alocação de Ativos', liquid_cash:'Caixa Líquido', equity_exposure:'Exposição em Ações',
-                sync_global_prices:'Sync Preços Globais', market_order:'Ordem de Mercado', dividend_options:'Opções de Dividendos',
-                transmit_order:'Transmitir Ordem', tab_assets:'Custódia', tab_history:'Histórico', tab_intel:'Intel Feed',
-                th_asset_sim:'Ativo', th_policy:'Política', th_yield:'Yield Div.', th_value:'Valor', th_pl_sim:'P/L %',
-                terminal_engine:'Terminal Engine v3.2', export_excel:'Exportar Excel', wipe_data:'Apagar Dados',
-                footer_brand:'Unmuzzled Intelligence Systems', footer_disclaimer:'Terminal de simulação. Apenas educação tática.',
-                add_position:'Adicionar Posição', lbl_ticker:'Ticker', lbl_qty:'Quantidade', lbl_cost:'Custo / ação',
-                lbl_date:'Data Compra', optional:'(opcional)', add_to_portfolio:'Adicionar ao Portfólio',
-                tab_holdings:'Posições', th_asset:'Ativo', th_qty:'Qtd', th_avg_cost:'Custo Médio',
-                th_mkt_price:'Preço Mercado', th_mkt_value:'Valor Mercado', th_pl:'P/L',
-                total:'TOTAL', cost_basis:'Custo total:', geo_exposure:'Exposição Geopolítica',
-                sync_prices:'Sync Preços', no_positions:'Adicione posições para ver sua exposição.',
-                enter_ticker:'Digite um ticker.', connecting:'Conectando ao satélite...',
-                price_synced:'Preço sincronizado', data_offline:'Feed offline. Insira manualmente.',
-                review_details:'Revise os detalhes.', position_added:'{0} adicionado ao portfólio.',
-                save_error:'Erro ao salvar. Verifique sua conexão.', syncing:'Sincronizando preços...',
-                lot:'lote', lots:'lotes', no_positions_long:'Nenhuma posição. Adicione uma para começar.',
-                remove_last_lot:'Remover último lote',
-                theme_defense:'Defesa', theme_energy:'Energia', theme_nuclear:'Nuclear', theme_semis:'Semicondutores',
-                theme_rareearths:'Terras Raras', theme_gold:'Ouro', theme_china:'China', theme_cyber:'Cyber', theme_other:'Outros',
-                last_30d:'Últimos 30 dias', starting_cash:'Caixa Inicial', apply:'Aplicar',
-                starting_cash_hint:'Reseta posições e define novo saldo de caixa.',
-                save_now:'Salvar Agora', saving:'Salvando...', saved_locally:'Salvo localmente (faça login para sync na nuvem)',
-                saved_at:'Salvo às', invalid_amount:'Insira um valor de pelo menos 100.',
-                login_first:'Faça login primeiro.', confirm_reset_with_cash:'Resetar portfólio com {0} de caixa inicial?',
-                cash_set:'Caixa inicial definido para {0}.', kpi_value_sim:'Valor do Portfólio', kpi_value_real:'Valor do Portfólio (Real)',
-                mode_sim:'Simulador', mode_real:'Portfólio Real',
-            },
-            es: {
-                cloud_sync:'Sync en la Nube Activo', logout:'Salir',
-                asset_allocation:'Asignación de Activos', liquid_cash:'Efectivo', equity_exposure:'Exposición Acciones',
-                sync_global_prices:'Sync Precios Globales', market_order:'Orden de Mercado', dividend_options:'Opciones de Dividendos',
-                transmit_order:'Transmitir Orden', tab_assets:'Custodia', tab_history:'Historial', tab_intel:'Intel Feed',
-                th_asset_sim:'Activo', th_policy:'Política', th_yield:'Rend. Div.', th_value:'Valor', th_pl_sim:'P/L %',
-                terminal_engine:'Terminal Engine v3.2', export_excel:'Exportar Excel', wipe_data:'Borrar Datos',
-                footer_brand:'Unmuzzled Intelligence Systems', footer_disclaimer:'Terminal de simulación. Solo educación táctica.',
-                add_position:'Añadir Posición', lbl_ticker:'Ticker', lbl_qty:'Cantidad', lbl_cost:'Coste / acción',
-                lbl_date:'Fecha Compra', optional:'(opcional)', add_to_portfolio:'Añadir a Cartera',
-                tab_holdings:'Posiciones', th_asset:'Activo', th_qty:'Ctd', th_avg_cost:'Coste Medio',
-                th_mkt_price:'Precio Mercado', th_mkt_value:'Valor Mercado', th_pl:'P/L',
-                total:'TOTAL', cost_basis:'Coste total:', geo_exposure:'Exposición Geopolítica',
-                sync_prices:'Sync Precios', no_positions:'Añade posiciones para ver tu exposición.',
-                enter_ticker:'Introduce un ticker.', connecting:'Conectando al satélite...',
-                price_synced:'Precio sincronizado', data_offline:'Feed offline. Introduce manualmente.',
-                review_details:'Revisa los detalles.', position_added:'{0} añadido a la cartera.',
-                save_error:'Error al guardar. Comprueba la conexión.', syncing:'Sincronizando precios...',
-                lot:'lote', lots:'lotes', no_positions_long:'Sin posiciones. Añade una para empezar.',
-                remove_last_lot:'Eliminar último lote',
-                theme_defense:'Defensa', theme_energy:'Energía', theme_nuclear:'Nuclear', theme_semis:'Semiconductores',
-                theme_rareearths:'Tierras Raras', theme_gold:'Oro', theme_china:'China', theme_cyber:'Cyber', theme_other:'Otros',
-                last_30d:'Últimos 30 días', starting_cash:'Capital Inicial', apply:'Aplicar',
-                starting_cash_hint:'Resetea posiciones y establece nuevo saldo.',
-                save_now:'Guardar Ahora', saving:'Guardando...', saved_locally:'Guardado localmente (regístrate para nube)',
-                saved_at:'Guardado a las', invalid_amount:'Introduce un importe de al menos 100.',
-                login_first:'Inicia sesión primero.', confirm_reset_with_cash:'¿Resetear cartera con {0} de capital inicial?',
-                cash_set:'Capital inicial fijado en {0}.', kpi_value_sim:'Valor de Cartera', kpi_value_real:'Valor de Cartera (Real)',
-                mode_sim:'Simulador', mode_real:'Cartera Real',
-            },
-        };
-
-        let currentSimLang = localStorage.getItem('sim_lang') || 'en';
-
-        function t8(key) {
-            const v = STR[currentSimLang]?.[key] ?? STR.en?.[key];
-            return v !== undefined ? v : key;
-        }
-
-        function applySimTranslations() {
-            document.querySelectorAll('[data-i18n]').forEach(el => {
-                const v = t8(el.dataset.i18n);
-                if (typeof v === 'string') el.textContent = v;
-            });
-            // Update mode buttons text
-            const simBtn = document.getElementById('mode-sim-btn');
-            const realBtn = document.getElementById('mode-real-btn');
-            if (simBtn) simBtn.textContent = t8('mode_sim');
-            if (realBtn) realBtn.textContent = t8('mode_real');
-            // KPI label
-            const kpiLabel = document.getElementById('kpi-value-label');
-            if (kpiLabel) kpiLabel.textContent = localState.mode === 'real' ? t8('kpi_value_real') : t8('kpi_value_sim');
-            // Lang button highlight
-            document.querySelectorAll('.lang-btn-sim').forEach(b => {
-                if (b.dataset.lang === currentSimLang) {
-                    b.classList.add('bg-[#CC2020]','text-white'); b.classList.remove('text-gray-400');
-                } else {
-                    b.classList.remove('bg-[#CC2020]','text-white'); b.classList.add('text-gray-400');
-                }
-            });
-        }
-
-        window.setSimLang = (lang) => {
-            if (!STR[lang]) return;
-            currentSimLang = lang;
-            localStorage.setItem('sim_lang', lang);
-            applySimTranslations();
-            updateUI();
-        };
-
-        // ─── REAL PORTFOLIO ────────────────────────────────────────────────
-        window.checkRpPrice = async () => {
-            const t = document.getElementById('rp-ticker').value.toUpperCase().trim();
-            if (!t) return showNotice(t8('enter_ticker'));
-            const status = document.getElementById('rp-price-status');
-            status.innerText = t8('connecting');
-            const res = await fetchLivePrice(t);
-            if (res) {
-                document.getElementById('rp-cost').value = res.price.toFixed(2);
-                status.innerText = t8('price_synced');
-                status.classList.add('text-[#CC2020]');
-                setTimeout(() => status.innerText = '', 2000);
-            } else {
-                status.innerText = t8('data_offline');
-                status.classList.remove('text-[#CC2020]');
-            }
-            // 30d history sparkline
-            fetchPriceHistory(t).then(hist => {
-                rpSparkChart = renderTickerSparkline('rp-spark', 'rp-spark-wrap', 'rp-spark-label', 'rp-spark-change', t, hist, rpSparkChart);
-            });
-        };
-
-        window.addRealPosition = async () => {
-            const ticker = document.getElementById('rp-ticker').value.toUpperCase().trim();
-            const qty = parseFloat(document.getElementById('rp-qty').value);
-            const cost = parseSmartFloat(document.getElementById('rp-cost').value);
-            const date = document.getElementById('rp-date').value || new Date().toISOString().slice(0,10);
-            if (!ticker || isNaN(qty) || qty <= 0 || isNaN(cost) || cost < 0) {
-                return showNotice(t8('review_details'));
-            }
-            if (!localState.realPortfolio) localState.realPortfolio = { positions:{}, currency:'USD' };
-            if (!localState.realPortfolio.positions[ticker]) {
-                localState.realPortfolio.positions[ticker] = { lots: [], meta: { name: ticker } };
-            }
-            localState.realPortfolio.positions[ticker].lots.push({ qty, costPrice: cost, buyDate: date });
-            // Try to fetch current price right away
-            const pres = await fetchLivePrice(ticker);
-            if (pres) localState.customMarketPrices[ticker] = pres.price;
-            try {
-                await saveToCloud(localState);
-                showNotice(t8('position_added').replace('{0}', ticker));
-                document.getElementById('rp-ticker').value = '';
-                document.getElementById('rp-qty').value = '';
-                document.getElementById('rp-cost').value = '';
-                document.getElementById('rp-date').value = '';
-                updateUI();
-            } catch (e) {
-                showNotice(t8('save_error'));
-                console.error(e);
-            }
-        };
-
-        window.removeRealPosition = async (ticker, lotIdx) => {
-            const pos = localState.realPortfolio?.positions?.[ticker];
-            if (!pos) return;
-            pos.lots.splice(lotIdx, 1);
-            if (pos.lots.length === 0) delete localState.realPortfolio.positions[ticker];
-            await saveToCloud(localState);
-            updateUI();
-        };
-
-        window.syncRpPrices = async () => {
-            const positions = localState.realPortfolio?.positions || {};
-            const tickers = Object.keys(positions);
-            if (tickers.length === 0) return;
-            showNotice(t8('syncing'));
-            for (const t of tickers) {
-                const data = await fetchLivePrice(t);
-                if (data) localState.customMarketPrices[t] = data.price;
-            }
-            await saveToCloud(localState);
-            updateUI();
-        };
-
-        function updateRealUI() {
-            const body = document.getElementById('rp-body');
-            const totalCostEl = document.getElementById('rp-total-cost');
-            const totalPlEl = document.getElementById('rp-total-pl');
-            const netWorthEl = document.getElementById('net-worth');
-            const plDisplay = document.getElementById('total-pl');
-            const geoBody = document.getElementById('rp-geo-body');
-            if (!body) return;
-
-            const positions = localState.realPortfolio?.positions || {};
-            const prices = localState.customMarketPrices || {};
-            let totalCost = 0, totalValue = 0;
-            const themeAgg = {}; // {Theme: value}
-
-            const rows = [];
-            for (const [ticker, pos] of Object.entries(positions)) {
-                let posQty = 0, posCost = 0;
-                pos.lots.forEach(lot => { posQty += lot.qty; posCost += lot.qty * lot.costPrice; });
-                const avgCost = posQty > 0 ? posCost / posQty : 0;
-                const mktPrice = prices[ticker] || avgCost;
-                const mktValue = posQty * mktPrice;
-                const pl = mktValue - posCost;
-                const plPct = posCost > 0 ? (pl / posCost) * 100 : 0;
-                totalCost += posCost;
-                totalValue += mktValue;
-
-                // Theme aggregation
-                const themes = getTickerThemes(ticker);
-                if (themes.length === 0) {
-                    themeAgg['Other'] = (themeAgg['Other'] || 0) + mktValue;
-                } else {
-                    // Split value equally among themes (if multi-tagged)
-                    const split = mktValue / themes.length;
-                    themes.forEach(th => { themeAgg[th] = (themeAgg[th] || 0) + split; });
-                }
-
-                rows.push(`
-                    <tr class="hover:bg-gray-50">
-                        <td class="px-4 py-3">
-                            <div class="flex items-center gap-2">
-                                <div class="font-bold text-[#1E2D4F]">${ticker}</div>
-                                ${INTEL_TICKERS.includes(ticker) ? '<span class="text-[8px] bg-[#CC2020]/10 text-[#CC2020] px-1 rounded border border-[#CC2020]/30 font-black">INTEL</span>' : ''}
-                            </div>
-                            <div class="text-[10px] text-gray-400">${pos.lots.length} ${pos.lots.length === 1 ? t8('lot') : t8('lots')}</div>
-                        </td>
-                        <td class="px-4 py-3 text-right font-mono text-sm">${posQty.toLocaleString('en-US', {maximumFractionDigits:4})}</td>
-                        <td class="px-4 py-3 text-right font-mono text-sm text-gray-600">${formatCurrency(avgCost)}</td>
-                        <td class="px-4 py-3 text-right font-mono text-sm">${formatCurrency(mktPrice)}</td>
-                        <td class="px-4 py-3 text-right font-mono font-bold text-[#1E2D4F]">${formatCurrency(mktValue)}</td>
-                        <td class="px-4 py-3 text-right font-mono ${pl >= 0 ? 'text-green-700' : 'text-red-700'}">
-                            <div class="font-bold">${pl >= 0 ? '▲' : '▼'} ${plPct.toFixed(2)}%</div>
-                            <div class="text-[10px] opacity-70">${formatCurrency(pl)}</div>
-                        </td>
-                        <td class="px-4 py-3 text-center">
-                            <button onclick="removeRealPosition('${ticker}', ${pos.lots.length - 1})" class="text-gray-300 hover:text-red-600 text-xs" title="${t8('remove_last_lot')}">×</button>
-                        </td>
-                    </tr>
-                `);
-            }
-            body.innerHTML = rows.join('') || `<tr><td colspan="7" class="p-12 text-center text-gray-400 italic">${t8('no_positions_long')}</td></tr>`;
-            totalCostEl.innerText = formatCurrency(totalCost);
-            const totalPL = totalValue - totalCost;
-            const totalPLPct = totalCost > 0 ? (totalPL / totalCost) * 100 : 0;
-            totalPlEl.innerText = `${totalPL >= 0 ? '+' : ''}${formatCurrency(totalPL)} (${totalPLPct.toFixed(2)}%)`;
-            totalPlEl.className = `px-4 py-4 text-right font-mono font-bold ${totalPL >= 0 ? 'text-green-700' : 'text-red-700'}`;
-
-            netWorthEl.innerText = formatCurrency(totalValue);
-            plDisplay.innerText = `${totalPL >= 0 ? '+' : ''}${formatCurrency(totalPL)} (${totalPLPct.toFixed(2)}%)`;
-            plDisplay.className = `text-xl font-bold font-mono ${totalPL >= 0 ? 'text-green-700' : 'text-red-700'}`;
-
-            // Asset allocation chart (use position values)
-            const tickerLabels = Object.keys(positions);
-            const tickerValues = tickerLabels.map(t => {
-                const p = positions[t];
-                let q = 0; p.lots.forEach(l => q += l.qty);
-                return q * (prices[t] || 0);
-            });
-            updateChart(tickerLabels, tickerValues, 0);
-
-            // Cash + assets labels (no cash in real mode)
-            const cashVal = document.getElementById('cash-val');
-            const assetsVal = document.getElementById('assets-val');
-            if (cashVal) cashVal.innerText = '—';
-            if (assetsVal) assetsVal.innerText = formatCurrency(totalValue);
-
-            // Geopolitical exposure bars
-            if (geoBody) {
-                const themes = Object.entries(themeAgg).sort((a,b) => b[1] - a[1]);
-                if (themes.length === 0 || totalValue === 0) {
-                    geoBody.innerHTML = `<div class="text-xs text-gray-400 italic">${t8('no_positions')}</div>`;
-                } else {
-                    geoBody.innerHTML = themes.map(([name, value]) => {
-                        const pct = (value / totalValue) * 100;
-                        const color = GEO_THEMES[name]?.color || '#6B7280';
-                        const themeLabel = t8('theme_' + name.toLowerCase()) !== ('theme_' + name.toLowerCase()) ? t8('theme_' + name.toLowerCase()) : name;
-                        return `
-                            <div class="flex items-center gap-3">
-                                <div class="w-24 text-xs font-bold text-gray-600">${themeLabel}</div>
-                                <div class="flex-1 bg-gray-100 rounded-full h-5 overflow-hidden relative">
-                                    <div class="h-full rounded-full transition-all" style="width:${pct}%; background:${color}"></div>
-                                </div>
-                                <div class="w-32 text-right text-xs font-mono">
-                                    <span class="font-bold text-[#1E2D4F]">${pct.toFixed(1)}%</span>
-                                    <span class="text-gray-400 ml-2">${formatCurrency(value)}</span>
-                                </div>
-                            </div>`;
-                    }).join('');
-                }
-            }
-
-            if (typeof lucide !== 'undefined') lucide.createIcons();
-        }
-
-
-        // ─── STARTING CASH + EXPLICIT SAVE ─────────────────────────────────
-        window.setStartingCash = async () => {
-            const amount = parseFloat(document.getElementById('starting-cash-input').value);
-            if (!amount || amount < 100) return showNotice(t8('invalid_amount'));
-            if (!currentUser) return showNotice(t8('login_first'));
-            if (!confirm(t8('confirm_reset_with_cash').replace('{0}', formatCurrency(amount)))) return;
-            localState.cash = amount;
-            localState.holdings = {};
-            localState.history = [];
-            localState.customMarketPrices = {};
-            localState.assetMeta = {};
-            try {
-                await saveToCloud(localState);
-                showNotice(t8('cash_set').replace('{0}', formatCurrency(amount)));
-                document.getElementById('starting-cash-input').value = '';
-                updateUI();
-            } catch (e) {
-                showNotice(t8('save_error'));
-            }
-        };
-
-        window.saveNow = async () => {
-            const btn = document.getElementById('save-btn');
-            const status = document.getElementById('save-status');
-            if (!currentUser) {
-                // Save locally if not logged in
-                try {
-                    localStorage.setItem('sim_local_state', JSON.stringify(localState));
-                    status.textContent = t8('saved_locally');
-                    status.className = 'text-[10px] text-center text-green-600 font-mono';
-                    setTimeout(() => { status.textContent = ''; status.className = 'text-[10px] text-center text-gray-400 font-mono'; }, 3000);
-                } catch (e) {
-                    showNotice(t8('save_error'));
-                }
-                return;
-            }
-            const oldLabel = document.getElementById('save-btn-label').textContent;
-            document.getElementById('save-btn-label').textContent = t8('saving');
-            btn.disabled = true;
-            try {
-                await saveToCloud(localState);
-                status.textContent = `✓ ${t8('saved_at')} ${new Date().toLocaleTimeString()}`;
-                status.className = 'text-[10px] text-center text-green-600 font-mono';
-                setTimeout(() => { status.textContent = ''; status.className = 'text-[10px] text-center text-gray-400 font-mono'; }, 3000);
-            } catch (e) {
-                status.textContent = `✗ ${t8('save_error')}`;
-                status.className = 'text-[10px] text-center text-red-600 font-mono';
-            }
-            document.getElementById('save-btn-label').textContent = oldLabel;
-            btn.disabled = false;
-        };
-
-        window.setMode = async (mode) => {
-            if (mode !== 'sim' && mode !== 'real') return;
-            localState.mode = mode;
-            const simBtn = document.getElementById('mode-sim-btn');
-            const realBtn = document.getElementById('mode-real-btn');
-            const kpiLabel = document.getElementById('kpi-value-label');
-            if (mode === 'sim') {
-                simBtn.classList.add('bg-[#CC2020]','text-white'); simBtn.classList.remove('text-gray-400');
-                realBtn.classList.remove('bg-[#CC2020]','text-white'); realBtn.classList.add('text-gray-400');
-                if (kpiLabel) kpiLabel.textContent = 'Portfolio Value';
-            } else {
-                realBtn.classList.add('bg-[#CC2020]','text-white'); realBtn.classList.remove('text-gray-400');
-                simBtn.classList.remove('bg-[#CC2020]','text-white'); simBtn.classList.add('text-gray-400');
-                if (kpiLabel) kpiLabel.textContent = 'Portfolio Value (Real)';
-            }
-            // Show/hide mode-specific sections (markers added next)
-            document.querySelectorAll('[data-mode="sim"]').forEach(el => el.classList.toggle('hidden', mode !== 'sim'));
-            document.querySelectorAll('[data-mode="real"]').forEach(el => el.classList.toggle('hidden', mode !== 'real'));
-            if (currentUser) await saveToCloud(localState);
-            updateUI();
-        };
-
         window.switchTab = (tab) => {
             document.querySelectorAll('.tab-content').forEach(c => c.classList.add('hidden'));
             document.getElementById(`tab-${tab}`).classList.remove('hidden');
@@ -1298,11 +949,12 @@
 
         window.addEventListener('load', () => {
             if (typeof lucide !== 'undefined') lucide.createIcons();
+            applyTranslations();
         });
     </script>
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;800&family=JetBrains+Mono:wght@500;700&display=swap');
-        body { font-family: 'Plus Jakarta Sans', sans-serif; background: #F4F6FB; color: #1a1a2e; }
+        @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;800&family=JetBrains+Mono:wght@500;700&family=Merriweather:wght@700;900&family=Inter:wght@400;500;600&display=swap');
+        body { font-family: 'Inter', 'Plus Jakarta Sans', sans-serif; background: #F4F6FB; color: #1a1a2e; }
         .card { background: #FFFFFF; border: 1px solid #E4E7F0; box-shadow: 0 2px 8px rgba(30,45,79,0.06); }
         .font-mono { font-family: 'JetBrains Mono', monospace; }
         input { background: #F8F9FC !important; border: 1px solid #DDE1EC !important; color: #1a1a2e !important; }
@@ -1317,17 +969,24 @@
     <!-- AUTH SCREEN -->
     <div id="auth-screen" class="min-h-[80vh] flex items-center justify-center">
         <div class="card rounded-3xl p-8 md:p-10 max-w-md w-full">
-            <div class="flex flex-col items-center mb-8">
+            <div class="flex flex-col items-center mb-6">
                 <div class="w-14 h-14 bg-[#CC2020] rounded-2xl rotate-12 flex items-center justify-center shadow-lg shadow-red-200 mb-4">
                     <i data-lucide="shield-check" class="text-white w-8 h-8 -rotate-12"></i>
                 </div>
                 <h1 class="text-2xl font-black tracking-tighter text-[#1E2D4F] uppercase">Unmuzzled <span class="text-[#CC2020]">Terminal</span></h1>
-                <p class="text-xs text-gray-400 mt-2 uppercase tracking-widest font-bold">Secure Access Required</p>
+                <p class="text-xs text-gray-400 mt-2 uppercase tracking-widest font-bold" data-i18n="secure_access">Secure Access Required</p>
+            </div>
+
+            <div class="flex gap-1 mb-4 justify-center">
+                <button class="lang-btn px-2 py-1 rounded text-[10px] font-bold uppercase text-gray-400" data-lang="en" onclick="switchLang('en')">EN</button>
+                <button class="lang-btn px-2 py-1 rounded text-[10px] font-bold uppercase text-gray-400" data-lang="pt" onclick="switchLang('pt')">PT</button>
+                <button class="lang-btn px-2 py-1 rounded text-[10px] font-bold uppercase text-gray-400" data-lang="fr" onclick="switchLang('fr')">FR</button>
+                <button class="lang-btn px-2 py-1 rounded text-[10px] font-bold uppercase text-gray-400" data-lang="es" onclick="switchLang('es')">ES</button>
             </div>
 
             <div class="flex bg-gray-100 rounded-xl p-1 mb-6">
-                <button id="tab-login" onclick="switchAuthTab('login')" class="flex-1 py-2 px-4 rounded-lg text-xs font-black uppercase tracking-widest bg-[#CC2020] text-white">Login</button>
-                <button id="tab-register" onclick="switchAuthTab('register')" class="flex-1 py-2 px-4 rounded-lg text-xs font-black uppercase tracking-widest text-gray-400">Register</button>
+                <button id="tab-login" onclick="switchAuthTab('login')" class="flex-1 py-2 px-4 rounded-lg text-xs font-black uppercase tracking-widest bg-[#CC2020] text-white" data-i18n="login">Login</button>
+                <button id="tab-register" onclick="switchAuthTab('register')" class="flex-1 py-2 px-4 rounded-lg text-xs font-black uppercase tracking-widest text-gray-400" data-i18n="register">Register</button>
             </div>
 
             <div id="auth-error" class="hidden bg-red-50 border border-red-200 text-red-700 text-xs font-bold p-3 rounded-lg mb-4"></div>
@@ -1335,38 +994,66 @@
 
             <div id="login-form" class="space-y-4">
                 <div>
-                    <label class="text-xs font-black text-gray-400 uppercase mb-2 block tracking-widest">Email</label>
+                    <label class="text-xs font-black text-gray-400 uppercase mb-2 block tracking-widest" data-i18n="email">Email</label>
                     <input id="login-email" type="email" autocomplete="email" class="w-full p-4 rounded-xl outline-none text-sm font-bold" placeholder="you@example.com">
                 </div>
                 <div>
-                    <label class="text-xs font-black text-gray-400 uppercase mb-2 block tracking-widest">Password</label>
+                    <label class="text-xs font-black text-gray-400 uppercase mb-2 block tracking-widest" data-i18n="password">Password</label>
                     <input id="login-password" type="password" autocomplete="current-password" class="w-full p-4 rounded-xl outline-none text-sm font-bold" placeholder="••••••••">
                 </div>
-                <button onclick="doLogin()" class="auth-btn w-full bg-[#CC2020] text-white font-black py-4 rounded-xl hover:bg-[#aa1818] active:scale-95 transition-all uppercase text-xs shadow-lg shadow-red-100">
-                    Access Terminal
-                </button>
-                <button onclick="doForgotPassword()" class="auth-btn w-full text-xs text-gray-400 hover:text-[#CC2020] uppercase font-black tracking-wider py-2">
-                    Forgot password?
-                </button>
+                <button onclick="doLogin()" class="auth-btn w-full bg-[#CC2020] text-white font-black py-4 rounded-xl hover:bg-[#aa1818] active:scale-95 transition-all uppercase text-xs shadow-lg shadow-red-100" data-i18n="access_terminal">Access Terminal</button>
+                <button onclick="doForgotPassword()" class="auth-btn w-full text-xs text-gray-400 hover:text-[#CC2020] uppercase font-black tracking-wider py-2" data-i18n="forgot_password">Forgot password?</button>
             </div>
 
             <div id="register-form" class="space-y-4 hidden">
                 <div>
-                    <label class="text-xs font-black text-gray-400 uppercase mb-2 block tracking-widest">Email</label>
+                    <label class="text-xs font-black text-gray-400 uppercase mb-2 block tracking-widest" data-i18n="email">Email</label>
                     <input id="register-email" type="email" autocomplete="email" class="w-full p-4 rounded-xl outline-none text-sm font-bold" placeholder="you@example.com">
                 </div>
                 <div>
-                    <label class="text-xs font-black text-gray-400 uppercase mb-2 block tracking-widest">Password</label>
-                    <input id="register-password" type="password" autocomplete="new-password" class="w-full p-4 rounded-xl outline-none text-sm font-bold" placeholder="At least 6 characters">
+                    <label class="text-xs font-black text-gray-400 uppercase mb-2 block tracking-widest" data-i18n="password">Password</label>
+                    <input id="register-password" type="password" autocomplete="new-password" class="w-full p-4 rounded-xl outline-none text-sm font-bold" placeholder="At least 6 characters" data-i18n-placeholder="password_create_hint">
                 </div>
                 <div>
-                    <label class="text-xs font-black text-gray-400 uppercase mb-2 block tracking-widest">Confirm Password</label>
-                    <input id="register-confirm" type="password" autocomplete="new-password" class="w-full p-4 rounded-xl outline-none text-sm font-bold" placeholder="Repeat password">
+                    <label class="text-xs font-black text-gray-400 uppercase mb-2 block tracking-widest" data-i18n="confirm_password">Confirm Password</label>
+                    <input id="register-confirm" type="password" autocomplete="new-password" class="w-full p-4 rounded-xl outline-none text-sm font-bold" placeholder="Repeat password" data-i18n-placeholder="password_repeat">
                 </div>
-                <button onclick="doRegister()" class="auth-btn w-full bg-[#CC2020] text-white font-black py-4 rounded-xl hover:bg-[#aa1818] active:scale-95 transition-all uppercase text-xs shadow-lg shadow-red-100">
-                    Create Account
-                </button>
+                <button onclick="doRegister()" class="auth-btn w-full bg-[#CC2020] text-white font-black py-4 rounded-xl hover:bg-[#aa1818] active:scale-95 transition-all uppercase text-xs shadow-lg shadow-red-100" data-i18n="create_account">Create Account</button>
             </div>
+
+            <p class="text-[10px] text-gray-300 uppercase tracking-[0.3em] text-center mt-8 font-black">Unmuzzled Intelligence Systems</p>
+        </div>
+    </div>
+
+    <!-- SUBSCRIPTION INACTIVE SCREEN -->
+    <div id="subscription-screen" class="hidden min-h-[80vh] flex items-center justify-center">
+        <div class="card rounded-3xl p-8 md:p-10 max-w-md w-full text-center">
+            <div class="flex flex-col items-center mb-6">
+                <div class="w-14 h-14 bg-[#CC2020] rounded-2xl rotate-12 flex items-center justify-center shadow-lg shadow-red-200 mb-4">
+                    <i data-lucide="lock" class="text-white w-8 h-8 -rotate-12"></i>
+                </div>
+                <h1 class="text-2xl font-black tracking-tighter text-[#1E2D4F] uppercase"><span data-i18n="subscription_inactive">Subscription Inactive</span></h1>
+                <p class="text-xs text-gray-400 mt-2 uppercase tracking-widest font-bold" data-i18n="access_required">Access Required</p>
+            </div>
+
+            <div class="flex gap-1 mb-4 justify-center">
+                <button class="lang-btn px-2 py-1 rounded text-[10px] font-bold uppercase text-gray-400" data-lang="en" onclick="switchLang('en')">EN</button>
+                <button class="lang-btn px-2 py-1 rounded text-[10px] font-bold uppercase text-gray-400" data-lang="pt" onclick="switchLang('pt')">PT</button>
+                <button class="lang-btn px-2 py-1 rounded text-[10px] font-bold uppercase text-gray-400" data-lang="fr" onclick="switchLang('fr')">FR</button>
+                <button class="lang-btn px-2 py-1 rounded text-[10px] font-bold uppercase text-gray-400" data-lang="es" onclick="switchLang('es')">ES</button>
+            </div>
+
+            <p class="text-sm text-gray-600 leading-relaxed mb-6">
+                <span data-i18n="inactive_msg_a">The account </span><span id="user-email-inactive" class="font-mono font-bold text-[#1E2D4F]"></span><span data-i18n="inactive_msg_b"> doesn't have an active simulator subscription.</span>
+            </p>
+
+            <p class="text-xs text-gray-500 leading-relaxed mb-8" data-i18n="inactive_help">If you just purchased, please wait a moment and refresh — activation can take up to 1 minute. If you cancelled or your payment failed, reactivate your subscription to regain access.</p>
+
+            <a href="https://unmuzzledmedia.com/simulator" class="block w-full bg-[#CC2020] text-white font-black py-4 rounded-xl hover:bg-[#aa1818] active:scale-95 transition-all uppercase text-xs shadow-lg shadow-red-100 no-underline mb-3" data-i18n="subscribe_reactivate">Subscribe / Reactivate →</a>
+
+            <button onclick="location.reload()" class="w-full text-xs text-gray-400 hover:text-[#1E2D4F] uppercase font-black tracking-widest py-3" data-i18n="already_sub">Already subscribed? Refresh</button>
+
+            <button onclick="doLogout()" class="w-full text-xs text-gray-400 hover:text-[#CC2020] uppercase font-black tracking-widest py-2 mt-2" data-i18n="sign_out">Sign out</button>
 
             <p class="text-[10px] text-gray-300 uppercase tracking-[0.3em] text-center mt-8 font-black">Unmuzzled Intelligence Systems</p>
         </div>
@@ -1383,29 +1070,25 @@
                     <h1 class="text-2xl font-black tracking-tighter text-[#1E2D4F] uppercase">Unmuzzled <span class="text-[#CC2020]">Terminal</span></h1>
                     <div class="flex items-center gap-2 mt-1">
                         <span class="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse"></span>
-                        <span id="cloud-status" data-i18n="cloud_sync" class="text-xs uppercase font-black tracking-[0.2em] text-gray-400">Cloud Sync Active</span>
+                        <span id="cloud-status" class="text-xs uppercase font-black tracking-[0.2em] text-gray-400" data-i18n="cloud_sync">Cloud Sync Active</span>
                     </div>
                 </div>
             </div>
             <div class="flex gap-4 items-center">
-                <div id="mode-switch" class="flex bg-white rounded-2xl p-1 border border-gray-200 shadow-sm">
-                    <button id="mode-sim-btn" onclick="setMode('sim')" class="px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest bg-[#CC2020] text-white">Simulator</button>
-                    <button id="mode-real-btn" onclick="setMode('real')" class="px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest text-gray-400 hover:text-[#1E2D4F]">Real Portfolio</button>
-                </div>
                 <div class="card px-6 py-4 rounded-2xl border-l-4 border-l-[#CC2020] min-w-[180px]">
-                    <p class="text-xs text-gray-400 uppercase font-black mb-1"><span id="kpi-value-label">Portfolio Value</span></p>
+                    <p class="text-xs text-gray-400 uppercase font-black mb-1" data-i18n="portfolio_value">Portfolio Value</p>
                     <p id="net-worth" class="text-xl font-bold font-mono text-[#1E2D4F]">$100,000.00</p>
                 </div>
                 <div class="card px-6 py-4 rounded-2xl border-l-4 border-l-green-500 min-w-[180px]">
-                    <p class="text-xs text-gray-400 uppercase font-black mb-1">Total Performance</p>
+                    <p class="text-xs text-gray-400 uppercase font-black mb-1" data-i18n="total_perf">Total Performance</p>
                     <p id="total-pl" class="text-xl font-bold font-mono text-green-700">+$0.00 (0%)</p>
                 </div>
                 <div class="flex flex-col items-end gap-1">
-                    <div id="lang-switch-sim" class="flex gap-1 bg-white rounded-lg p-1 border border-gray-200 mb-1">
-                        <button class="lang-btn-sim px-2 py-1 rounded text-[9px] font-black tracking-wider" data-lang="en" onclick="setSimLang('en')">EN</button>
-                        <button class="lang-btn-sim px-2 py-1 rounded text-[9px] font-black tracking-wider" data-lang="fr" onclick="setSimLang('fr')">FR</button>
-                        <button class="lang-btn-sim px-2 py-1 rounded text-[9px] font-black tracking-wider" data-lang="pt-br" onclick="setSimLang('pt-br')">PT-BR</button>
-                        <button class="lang-btn-sim px-2 py-1 rounded text-[9px] font-black tracking-wider" data-lang="es" onclick="setSimLang('es')">ES</button>
+                    <div class="flex gap-1">
+                        <button class="lang-btn px-1.5 py-0.5 rounded text-[9px] font-bold uppercase text-gray-400" data-lang="en" onclick="switchLang('en')">EN</button>
+                        <button class="lang-btn px-1.5 py-0.5 rounded text-[9px] font-bold uppercase text-gray-400" data-lang="pt" onclick="switchLang('pt')">PT</button>
+                        <button class="lang-btn px-1.5 py-0.5 rounded text-[9px] font-bold uppercase text-gray-400" data-lang="fr" onclick="switchLang('fr')">FR</button>
+                        <button class="lang-btn px-1.5 py-0.5 rounded text-[9px] font-bold uppercase text-gray-400" data-lang="es" onclick="switchLang('es')">ES</button>
                     </div>
                     <span id="user-email" class="text-[10px] text-gray-400 font-mono"></span>
                     <button onclick="doLogout()" class="text-xs text-gray-400 hover:text-[#CC2020] uppercase font-black tracking-widest flex items-center gap-1">
@@ -1433,26 +1116,11 @@
                         </div>
                     </div>
                     <button onclick="syncPortfolioPrices()" class="mt-6 w-full text-xs font-black uppercase text-[#CC2020] border border-[#CC2020]/30 py-3 rounded-xl hover:bg-[#CC2020]/5 transition-colors flex items-center justify-center gap-2">
-                        <i data-lucide="refresh-cw" class="w-4 h-4"></i> <span data-i18n="sync_global_prices">Sync Global Prices</span>
+                        <i data-lucide="refresh-cw" class="w-4 h-4"></i> <span data-i18n="sync_prices">Sync Global Prices</span>
                     </button>
-                    <div data-mode="sim" class="mt-4 pt-4 border-t border-gray-100 space-y-3">
-                        <div>
-                            <label class="text-[10px] font-black text-gray-400 uppercase mb-1 block tracking-widest" data-i18n="starting_cash">Starting Cash</label>
-                            <div class="flex gap-2">
-                                <input id="starting-cash-input" type="number" min="100" step="100" class="flex-1 p-3 rounded-xl outline-none text-sm font-mono font-bold border border-gray-200" placeholder="100000">
-                                <button onclick="setStartingCash()" class="px-4 bg-[#1E2D4F] text-white rounded-xl text-xs font-black uppercase hover:bg-[#2C4070]" data-i18n="apply">Apply</button>
-                            </div>
-                            <p class="text-[9px] text-gray-400 mt-1" data-i18n="starting_cash_hint">Resets holdings, sets new cash balance.</p>
-                        </div>
-                        <button onclick="saveNow()" id="save-btn" class="w-full text-xs font-black uppercase tracking-widest py-3 rounded-xl bg-[#1E2D4F] text-white hover:bg-[#2C4070] flex items-center justify-center gap-2 transition-colors">
-                            <i data-lucide="save" class="w-4 h-4"></i>
-                            <span id="save-btn-label" data-i18n="save_now">Save Now</span>
-                        </button>
-                        <p id="save-status" class="text-[10px] text-center text-gray-400 font-mono"></p>
-                    </div>
                 </div>
 
-                <div data-mode="sim" class="card p-8 rounded-3xl">
+                <div class="card p-8 rounded-3xl">
                     <div class="flex justify-between items-center mb-6">
                         <h3 class="text-sm font-black text-[#CC2020] uppercase tracking-widest font-mono" data-i18n="market_order">Market Order</h3>
                         <button onclick="toggleCustomFields()" class="text-xs text-gray-400 uppercase font-black hover:text-[#1E2D4F]" data-i18n="dividend_options">Dividend Options</button>
@@ -1460,8 +1128,8 @@
                     <div class="space-y-4">
                         <div class="flex gap-2">
                             <div class="flex-1">
-                                <label class="text-xs font-black text-gray-400 uppercase mb-2 block tracking-widest">Ticker</label>
-                                <input id="trade-ticker" type="text" placeholder="EX: AAPL" class="w-full p-4 rounded-xl outline-none text-sm font-bold uppercase tracking-widest">
+                                <label class="text-xs font-black text-gray-400 uppercase mb-2 block tracking-widest" data-i18n="ticker">Ticker</label>
+                                <input id="trade-ticker" type="text" placeholder="EX: AAPL" data-i18n-placeholder="ticker_ex" class="w-full p-4 rounded-xl outline-none text-sm font-bold uppercase tracking-widest">
                             </div>
                             <div class="pt-6">
                                 <button onclick="checkPrice()" class="h-[52px] px-4 bg-[#1E2D4F] rounded-xl text-white hover:bg-[#2C4070] flex items-center justify-center transition-colors">
@@ -1470,13 +1138,6 @@
                             </div>
                         </div>
                         <p id="price-status" class="text-xs font-bold uppercase text-center h-3 italic text-gray-400"></p>
-                        <div id="trade-spark-wrap" class="hidden bg-gray-50 rounded-xl p-3 border border-gray-100">
-                            <div class="flex justify-between items-center mb-1">
-                                <span id="trade-spark-label" class="text-[10px] uppercase font-black tracking-widest text-gray-400"></span>
-                                <span id="trade-spark-change" class="text-[10px] font-mono font-bold"></span>
-                            </div>
-                            <div style="height:60px"><canvas id="trade-spark"></canvas></div>
-                        </div>
                         <div id="custom-fields" class="hidden space-y-4 p-4 bg-gray-50 rounded-2xl border border-gray-200">
                             <div class="grid grid-cols-2 gap-3">
                                 <input id="trade-yield" type="text" value="0.00%" class="w-full p-2 rounded-lg text-xs font-mono" placeholder="Yield %">
@@ -1492,85 +1153,38 @@
                         </div>
                         <div class="grid grid-cols-2 gap-3">
                             <select id="trade-type" class="p-4 rounded-xl outline-none text-sm font-black uppercase px-4">
-                                <option value="BUY">Buy</option>
-                                <option value="SELL">Sell</option>
+                                <option value="BUY" data-i18n="buy">Buy</option>
+                                <option value="SELL" data-i18n="sell">Sell</option>
                             </select>
                             <input id="trade-qty" type="number" value="10" class="p-4 rounded-xl outline-none text-center font-mono font-bold">
                         </div>
-                        <input id="trade-price" type="text" placeholder="Execution Price" class="w-full p-4 rounded-xl outline-none font-mono text-center text-lg">
-                        <button onclick="executeTrade()" class="w-full bg-[#CC2020] text-white font-black py-5 rounded-xl hover:bg-[#aa1818] active:scale-95 transition-all uppercase text-xs mt-2 shadow-lg shadow-red-100" data-i18n="transmit_order">
-                            Transmit Order
-                        </button>
+                        <input id="trade-price" type="text" placeholder="Execution Price" data-i18n-placeholder="exec_price" class="w-full p-4 rounded-xl outline-none font-mono text-center text-lg">
+                        <button onclick="executeTrade()" class="w-full bg-[#CC2020] text-white font-black py-5 rounded-xl hover:bg-[#aa1818] active:scale-95 transition-all uppercase text-xs mt-2 shadow-lg shadow-red-100" data-i18n="transmit_order">Transmit Order</button>
                     </div>
                 </div>
-
-                <div data-mode="real" class="card p-8 rounded-3xl hidden">
-                    <div class="flex justify-between items-center mb-6">
-                        <h3 class="text-sm font-black text-[#CC2020] uppercase tracking-widest font-mono" data-i18n="add_position">Add Position</h3>
-                    </div>
-                    <div class="space-y-4">
-                        <div class="flex gap-2">
-                            <div class="flex-1">
-                                <label class="text-xs font-black text-gray-400 uppercase mb-2 block tracking-widest" data-i18n="lbl_ticker">Ticker</label>
-                                <input id="rp-ticker" type="text" placeholder="EX: RTX" class="w-full p-4 rounded-xl outline-none text-sm font-bold uppercase tracking-widest">
-                            </div>
-                            <div class="pt-6">
-                                <button onclick="checkRpPrice()" class="h-[52px] px-4 bg-[#1E2D4F] rounded-xl text-white hover:bg-[#2C4070] flex items-center justify-center transition-colors">
-                                    <i data-lucide="search" class="w-5 h-5"></i>
-                                </button>
-                            </div>
-                        </div>
-                        <p id="rp-price-status" class="text-xs font-bold uppercase text-center h-3 italic text-gray-400"></p>
-                        <div id="rp-spark-wrap" class="hidden bg-gray-50 rounded-xl p-3 border border-gray-100">
-                            <div class="flex justify-between items-center mb-1">
-                                <span id="rp-spark-label" class="text-[10px] uppercase font-black tracking-widest text-gray-400"></span>
-                                <span id="rp-spark-change" class="text-[10px] font-mono font-bold"></span>
-                            </div>
-                            <div style="height:60px"><canvas id="rp-spark"></canvas></div>
-                        </div>
-                        <div class="grid grid-cols-2 gap-3">
-                            <div>
-                                <label class="text-xs font-black text-gray-400 uppercase mb-2 block tracking-widest" data-i18n="lbl_qty">Quantity</label>
-                                <input id="rp-qty" type="number" step="0.0001" placeholder="100" class="w-full p-4 rounded-xl outline-none text-center font-mono font-bold">
-                            </div>
-                            <div>
-                                <label class="text-xs font-black text-gray-400 uppercase mb-2 block tracking-widest" data-i18n="lbl_cost">Cost / share</label>
-                                <input id="rp-cost" type="text" placeholder="0.00" class="w-full p-4 rounded-xl outline-none text-center font-mono font-bold">
-                            </div>
-                        </div>
-                        <div>
-                            <label class="text-xs font-black text-gray-400 uppercase mb-2 block tracking-widest" data-i18n="lbl_date">Buy Date <span class="text-gray-300 normal-case font-normal" data-i18n="optional">(optional)</span></label>
-                            <input id="rp-date" type="date" class="w-full p-4 rounded-xl outline-none font-mono text-sm">
-                        </div>
-                        <button onclick="addRealPosition()" class="w-full bg-[#1E2D4F] text-white font-black py-5 rounded-xl hover:bg-[#2C4070] active:scale-95 transition-all uppercase text-xs mt-2 shadow-lg" data-i18n="add_to_portfolio">
-                            Add to Portfolio
-                        </button>
-                    </div>
-                </div>
-
             </div>
 
             <div class="lg:col-span-8 space-y-6">
-                <div data-mode="sim" class="flex gap-10 border-b border-gray-200 pb-1 overflow-x-auto no-scrollbar">
-                    <button onclick="switchTab('assets')" class="tab-btn px-1 py-4 text-sm font-black uppercase tracking-[0.15em] border-b-2 border-[#CC2020] text-[#CC2020] whitespace-nowrap" data-i18n="tab_assets">Asset Custody</button>
-                    <button onclick="switchTab('history')" data-i18n="tab_history" class="tab-btn px-1 py-4 text-sm font-black uppercase tracking-[0.15em] border-b-2 border-transparent text-gray-400 whitespace-nowrap">History</button>
+                <div class="flex gap-10 border-b border-gray-200 pb-1 overflow-x-auto no-scrollbar">
+                    <button onclick="switchTab('assets')" class="tab-btn px-1 py-4 text-sm font-black uppercase tracking-[0.15em] border-b-2 border-[#CC2020] text-[#CC2020] whitespace-nowrap" data-i18n="asset_custody">Asset Custody</button>
+                    <button onclick="switchTab('history')" class="tab-btn px-1 py-4 text-sm font-black uppercase tracking-[0.15em] border-b-2 border-transparent text-gray-400 whitespace-nowrap" data-i18n="history">History</button>
                     <button id="intel-tab-btn" onclick="switchTab('intel')" class="tab-btn px-1 py-4 text-sm font-black uppercase tracking-[0.15em] border-b-2 border-transparent text-gray-400 whitespace-nowrap flex items-center gap-2">
-                        <span data-i18n="tab_intel">Intel Feed</span>
+                        <span data-i18n="intel_feed">Intel Feed</span>
                         <span id="intel-dot" class="hidden w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
                     </button>
                 </div>
 
-                <div id="tab-assets" data-mode="sim" class="tab-content">
+                <div id="tab-assets" class="tab-content">
                     <div class="card rounded-3xl overflow-hidden">
                         <div class="overflow-x-auto">
                             <table class="w-full text-sm">
                                 <thead class="text-xs text-gray-400 uppercase font-black tracking-wider bg-gray-50 border-b border-gray-100">
                                     <tr>
-                                        <th class="px-6 py-5 text-left" data-i18n="th_asset_sim">Asset</th>
-                                        <th class="px-6 py-5 text-left" data-i18n="th_policy">Policy</th>
-                                        <th class="px-6 py-5 text-right" data-i18n="th_yield">Div. Yield</th>
-                                        <th class="px-6 py-5 text-right" data-i18n="th_value">Value</th>
-                                        <th class="px-6 py-5 text-right" data-i18n="th_pl_sim">P/L %</th>
+                                        <th class="px-6 py-5 text-left" data-i18n="asset">Asset</th>
+                                        <th class="px-6 py-5 text-left" data-i18n="policy">Policy</th>
+                                        <th class="px-6 py-5 text-right" data-i18n="div_yield">Div. Yield</th>
+                                        <th class="px-6 py-5 text-right" data-i18n="value">Value</th>
+                                        <th class="px-6 py-5 text-right" data-i18n="pl_pct">P/L %</th>
                                     </tr>
                                 </thead>
                                 <tbody id="portfolio-body" class="divide-y divide-gray-50"></tbody>
@@ -1579,108 +1193,57 @@
                     </div>
                 </div>
 
-
-                <div data-mode="real" class="hidden">
-                    <div class="flex gap-10 border-b border-gray-200 pb-1 mb-6">
-                        <span class="px-1 py-4 text-sm font-black uppercase tracking-[0.15em] border-b-2 border-[#CC2020] text-[#CC2020]" data-i18n="tab_holdings">Holdings</span>
-                    </div>
-
-                    <div class="card rounded-3xl overflow-hidden mb-6">
-                        <div class="overflow-x-auto">
-                            <table class="w-full text-sm">
-                                <thead class="text-xs text-gray-400 uppercase font-black tracking-wider bg-gray-50 border-b border-gray-100">
-                                    <tr>
-                                        <th class="px-4 py-5 text-left" data-i18n="th_asset">Asset</th>
-                                        <th class="px-4 py-5 text-right" data-i18n="th_qty">Qty</th>
-                                        <th class="px-4 py-5 text-right" data-i18n="th_avg_cost">Avg Cost</th>
-                                        <th class="px-4 py-5 text-right" data-i18n="th_mkt_price">Mkt Price</th>
-                                        <th class="px-4 py-5 text-right" data-i18n="th_mkt_value">Mkt Value</th>
-                                        <th class="px-4 py-5 text-right" data-i18n="th_pl">P/L</th>
-                                        <th class="px-4 py-5 text-center"></th>
-                                    </tr>
-                                </thead>
-                                <tbody id="rp-body" class="divide-y divide-gray-50"></tbody>
-                                <tfoot class="bg-gray-50 border-t border-gray-200">
-                                    <tr>
-                                        <td class="px-4 py-4 text-xs font-black text-gray-500 uppercase tracking-wider" data-i18n="total">TOTAL</td>
-                                        <td colspan="2"></td>
-                                        <td class="px-4 py-4 text-right text-xs text-gray-500" data-i18n="cost_basis">Cost basis:</td>
-                                        <td id="rp-total-cost" class="px-4 py-4 text-right font-mono font-bold text-[#1E2D4F]">$0.00</td>
-                                        <td id="rp-total-pl" class="px-4 py-4 text-right font-mono font-bold">+$0.00 (0%)</td>
-                                        <td></td>
-                                    </tr>
-                                </tfoot>
-                            </table>
-                        </div>
-                    </div>
-
-                    <div class="card p-6 rounded-3xl">
-                        <div class="flex justify-between items-center mb-4">
-                            <h3 class="text-sm font-black text-[#1E2D4F] uppercase tracking-widest" data-i18n="geo_exposure">Geopolitical Exposure</h3>
-                            <button onclick="syncRpPrices()" class="text-xs text-[#CC2020] uppercase font-black tracking-wider hover:text-[#1E2D4F] flex items-center gap-1">
-                                <i data-lucide="refresh-cw" class="w-3 h-3"></i> <span data-i18n="sync_prices">Sync Prices</span>
-                            </button>
-                        </div>
-                        <div id="rp-geo-body" class="space-y-2">
-                            <div class="text-xs text-gray-400 italic" data-i18n="no_positions">Add positions to see your thematic exposure.</div>
-                        </div>
-                    </div>
-                </div>
-
                 <div class="card p-5 rounded-2xl">
                     <div class="flex items-center justify-between">
-                        <h3 class="text-sm font-black text-[#CC2020] uppercase tracking-widest font-mono">Dividend Policy</h3>
-                        <span id="est-income" class="text-[#CC2020] font-mono font-bold text-sm">$0.00 <span class="text-gray-400 font-normal text-xs">est. annual</span></span>
+                        <h3 class="text-sm font-black text-[#CC2020] uppercase tracking-widest font-mono" data-i18n="dividend_policy">Dividend Policy</h3>
+                        <span id="est-income" class="text-[#CC2020] font-mono font-bold text-sm">$0.00 <span class="text-gray-400 font-normal text-xs" data-i18n="est_annual">est. annual</span></span>
                     </div>
                     <div class="flex gap-6 mt-3">
                         <label class="flex items-center gap-2 cursor-pointer">
                             <input type="radio" name="div-policy" value="reinvest" checked class="accent-[#CC2020] w-4 h-4">
                             <div>
-                                <div class="text-sm font-black text-gray-800 uppercase tracking-wide">Reinvest Dividends</div>
-                                <div class="text-xs text-gray-400">Auto-compound into position</div>
+                                <div class="text-sm font-black text-gray-800 uppercase tracking-wide" data-i18n="reinvest">Reinvest Dividends</div>
+                                <div class="text-xs text-gray-400" data-i18n="auto_compound">Auto-compound into position</div>
                             </div>
                         </label>
                         <label class="flex items-center gap-2 cursor-pointer">
                             <input type="radio" name="div-policy" value="cash" class="accent-[#CC2020] w-4 h-4">
                             <div>
-                                <div class="text-sm font-black text-gray-800 uppercase tracking-wide">Receive as Cash</div>
-                                <div class="text-xs text-gray-400">Added to liquid balance</div>
+                                <div class="text-sm font-black text-gray-800 uppercase tracking-wide" data-i18n="receive_cash">Receive as Cash</div>
+                                <div class="text-xs text-gray-400" data-i18n="added_balance">Added to liquid balance</div>
                             </div>
                         </label>
                     </div>
                 </div>
 
-                <div id="tab-history" data-mode="sim" class="tab-content hidden">
+                <div id="chart-container" class="hidden card p-5 rounded-2xl">
+                    <div class="flex items-center justify-between mb-3">
+                        <h3 class="text-sm font-black text-[#CC2020] uppercase tracking-widest font-mono" data-i18n="price_chart">Price Chart</h3>
+                        <span id="chart-ticker-label" class="text-xs text-gray-400 font-mono font-bold uppercase"></span>
+                    </div>
+                    <div class="rounded-xl overflow-hidden border border-gray-200" style="height:520px;background:#F8F9FC;">
+                        <iframe id="ticker-chart" src="" frameborder="0" allowtransparency="true" scrolling="no" style="width:100%;height:100%;border:0;display:block;"></iframe>
+                    </div>
+                </div>
+
+                <div id="tab-history" class="tab-content hidden">
                     <div class="card rounded-3xl overflow-hidden max-h-[600px]">
                         <div id="history-body" class="divide-y divide-gray-100 p-2"></div>
                     </div>
                 </div>
 
-                <div id="tab-intel" data-mode="sim" class="tab-content hidden">
+                <div id="tab-intel" class="tab-content hidden">
                     <div class="card rounded-3xl overflow-hidden max-h-[600px] overflow-y-auto">
                         <div id="intel-body" class="divide-y divide-gray-100">
                             <div class="p-12 text-center text-gray-400 italic text-sm">
-                                Search a ticker above to load news. If articles exist, this tab lights up green.
+                                Search a ticker above to load news.
                             </div>
                         </div>
                     </div>
                 </div>
 
-
-<div class="flex justify-between items-center px-4">
-                    <span class="text-xs font-black uppercase tracking-[0.2em] text-gray-300 italic"><span data-i18n="terminal_engine">Terminal Engine v3.2</span></span>
+                <div class="flex justify-between items-center px-4">
+                    <span class="text-xs font-black uppercase tracking-[0.2em] text-gray-300 italic">Terminal Engine v3.2</span>
                     <div class="flex gap-4 items-center">
-                        <button onclick="exportToExcel()" class="text-xs text-[#CC2020] hover:text-[#1E2D4F] uppercase font-black tracking-wider transition-all border border-[#CC2020]/30 px-3 py-2 rounded-lg hover:bg-gray-50">⬇ <span data-i18n="export_excel">Export Excel</span></button>
-                        <button id="wipe-btn" onclick="resetPortfolio()" data-confirm="false" class="text-xs text-gray-300 hover:text-red-600 uppercase font-black tracking-wider transition-all" data-i18n="wipe_data">Wipe Terminal Data</button>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <footer class="mt-20 text-center border-t border-gray-100 pt-10 pb-20">
-            <p class="text-[10px] text-gray-400 uppercase tracking-[0.6em] mb-3 font-black" data-i18n="footer_brand">Unmuzzled Intelligence Systems</p>
-            <p class="text-[9px] text-gray-300 font-bold italic" data-i18n="footer_disclaimer">Simulated trading terminal. Tactical education only.</p>
-        </footer>
-    </div>
-</body>
-</html>
+                        <button onclick="exportToExcel()" class="text-xs text-[#CC2020] hover:text-[#1E2D4F] uppercase font-black tracking-wider transition-all border border-[#CC2020]/30 px-3 py-2 rounded-lg hover:bg-gray-50" data-i18n="export_excel">⬇ Export Excel</button>
+                        <button id="wipe-btn" onclick="resetPortfolio()" data-confirm="false" class="text-xs text-gray-300 hover:text-red-600 uppercase font-black trac
