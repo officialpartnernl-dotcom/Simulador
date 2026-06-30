@@ -1136,6 +1136,29 @@
         let tickerSearchTimer = null;
         let tickerSuggestionsVisible = false;
 
+        let tickerSuggHighlight = -1;
+        let lastSearchToken = 0;
+        const TYPE_BADGE = {
+            EQUITY:   { label: 'Stock', cls: 'bg-blue-100 text-blue-700' },
+            ETF:      { label: 'ETF',   cls: 'bg-purple-100 text-purple-700' },
+            INDEX:    { label: 'Index', cls: 'bg-gray-200 text-gray-700' },
+            MUTUALFUND: { label: 'Fund', cls: 'bg-amber-100 text-amber-700' },
+            CRYPTOCURRENCY: { label: 'Crypto', cls: 'bg-orange-100 text-orange-700' },
+            CURRENCY: { label: 'FX', cls: 'bg-green-100 text-green-700' },
+            FUTURE:   { label: 'Fut', cls: 'bg-red-100 text-red-700' },
+        };
+
+        function escapeHtml(str) {
+            return String(str || '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+        }
+
+        function highlightMatch(text, query) {
+            if (!text || !query) return escapeHtml(text);
+            const safe = escapeHtml(text);
+            const re = new RegExp('(' + query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ')', 'i');
+            return safe.replace(re, '<span class="bg-yellow-100 text-[#CC2020] font-bold">$1</span>');
+        }
+
         async function searchTickers(query) {
             try {
                 const r = await fetch(`https://stock-prices.pimpthenet.workers.dev/?search=${encodeURIComponent(query)}`);
@@ -1145,32 +1168,72 @@
             } catch(e) { return []; }
         }
 
-        function renderSuggestions(items) {
+        function renderSuggestions(items, query) {
             const box = document.getElementById('ticker-suggestions');
             if (!box) return;
-            if (!items.length) { box.classList.add('hidden'); tickerSuggestionsVisible = false; return; }
-            box.innerHTML = items.slice(0, 8).map(q => {
+            tickerSuggHighlight = -1;
+            if (!items.length) {
+                box.innerHTML = '<div class="px-4 py-3 text-xs text-gray-400 italic">No matches found.</div>';
+                box.classList.remove('hidden');
+                tickerSuggestionsVisible = true;
+                return;
+            }
+            box.innerHTML = items.slice(0, 8).map((q, idx) => {
                 const sym = q.symbol || '';
                 const name = q.longname || q.shortname || sym;
                 const exch = q.exchDisp || q.exchange || '';
-                return `<div class="ticker-sugg px-3 py-2 hover:bg-gray-100 cursor-pointer border-b border-gray-100 last:border-0" data-symbol="${sym}">
-                    <div class="flex items-center justify-between gap-2">
-                        <span class="font-mono font-bold text-sm text-[#1E2D4F]">${sym}</span>
-                        <span class="text-[10px] text-gray-400 uppercase">${exch}</span>
+                const type = q.type || 'EQUITY';
+                const badge = TYPE_BADGE[type] || TYPE_BADGE.EQUITY;
+                return `<div class="ticker-sugg px-3 py-2.5 hover:bg-gray-100 cursor-pointer border-b border-gray-100 last:border-0" data-symbol="${escapeHtml(sym)}" data-idx="${idx}">
+                    <div class="flex items-center justify-between gap-2 mb-0.5">
+                        <div class="flex items-center gap-2 min-w-0">
+                            <span class="font-mono font-bold text-sm text-[#1E2D4F] truncate">${highlightMatch(sym, query)}</span>
+                            <span class="text-[9px] px-1.5 py-0.5 rounded ${badge.cls} font-black uppercase tracking-wider whitespace-nowrap">${badge.label}</span>
+                        </div>
+                        <span class="text-[10px] text-gray-400 uppercase whitespace-nowrap flex-shrink-0">${escapeHtml(exch)}</span>
                     </div>
-                    <div class="text-xs text-gray-500 truncate">${name}</div>
+                    <div class="text-xs text-gray-500 truncate">${highlightMatch(name, query)}</div>
                 </div>`;
             }).join('');
             box.querySelectorAll('.ticker-sugg').forEach(el => {
-                el.addEventListener('click', () => {
-                    const sym = el.getAttribute('data-symbol');
-                    const input = document.getElementById('trade-ticker');
-                    input.value = sym;
-                    box.classList.add('hidden');
-                    tickerSuggestionsVisible = false;
-                    window.checkPrice();
+                el.addEventListener('click', () => selectSuggestion(el));
+                el.addEventListener('mouseenter', () => {
+                    const idx = parseInt(el.getAttribute('data-idx'));
+                    if (!isNaN(idx)) updateSuggHighlight(idx);
                 });
             });
+            box.classList.remove('hidden');
+            tickerSuggestionsVisible = true;
+        }
+
+        function selectSuggestion(el) {
+            const sym = el.getAttribute('data-symbol');
+            const input = document.getElementById('trade-ticker');
+            const box = document.getElementById('ticker-suggestions');
+            input.value = sym;
+            if (box) box.classList.add('hidden');
+            tickerSuggestionsVisible = false;
+            tickerSuggHighlight = -1;
+            window.checkPrice();
+        }
+
+        function updateSuggHighlight(idx) {
+            const items = document.querySelectorAll('.ticker-sugg');
+            if (!items.length) return;
+            tickerSuggHighlight = Math.max(-1, Math.min(items.length - 1, idx));
+            items.forEach((el, i) => {
+                if (i === tickerSuggHighlight) el.classList.add('bg-blue-50');
+                else el.classList.remove('bg-blue-50');
+            });
+            if (tickerSuggHighlight >= 0) {
+                items[tickerSuggHighlight].scrollIntoView({ block: 'nearest' });
+            }
+        }
+
+        function showLoadingSugg() {
+            const box = document.getElementById('ticker-suggestions');
+            if (!box) return;
+            box.innerHTML = '<div class="px-4 py-3 text-xs text-gray-400 italic flex items-center gap-2"><span class="w-3 h-3 border-2 border-gray-300 border-t-[#CC2020] rounded-full animate-spin"></span>Searching…</div>';
             box.classList.remove('hidden');
             tickerSuggestionsVisible = true;
         }
@@ -1179,41 +1242,72 @@
             const val = e.target.value.trim();
             clearTimeout(tickerSearchTimer);
             const box = document.getElementById('ticker-suggestions');
-            // If it looks like a ticker (≤5 chars, all letters), don't auto-search
             if (val.length < 2) {
                 if (box) box.classList.add('hidden');
                 tickerSuggestionsVisible = false;
                 return;
             }
+            // Show loading state immediately for snappy feel
+            showLoadingSugg();
+            const myToken = ++lastSearchToken;
             tickerSearchTimer = setTimeout(async () => {
                 const results = await searchTickers(val);
-                renderSuggestions(results);
-            }, 280);
+                // Discard stale responses (user typed again)
+                if (myToken !== lastSearchToken) return;
+                renderSuggestions(results, val);
+            }, 220);
         }
 
         function setupTickerInteractions() {
             const input = document.getElementById('trade-ticker');
             const box = document.getElementById('ticker-suggestions');
             if (!input) return;
-            // Enter triggers search
+
             input.addEventListener('keydown', (e) => {
+                const items = document.querySelectorAll('.ticker-sugg');
                 if (e.key === 'Enter') {
                     e.preventDefault();
-                    if (box) box.classList.add('hidden');
-                    tickerSuggestionsVisible = false;
-                    window.checkPrice();
+                    if (tickerSuggestionsVisible && tickerSuggHighlight >= 0 && items[tickerSuggHighlight]) {
+                        selectSuggestion(items[tickerSuggHighlight]);
+                    } else {
+                        if (box) box.classList.add('hidden');
+                        tickerSuggestionsVisible = false;
+                        window.checkPrice();
+                    }
                 } else if (e.key === 'Escape') {
                     if (box) box.classList.add('hidden');
                     tickerSuggestionsVisible = false;
+                    tickerSuggHighlight = -1;
+                } else if (e.key === 'ArrowDown') {
+                    if (tickerSuggestionsVisible && items.length) {
+                        e.preventDefault();
+                        updateSuggHighlight((tickerSuggHighlight + 1) % items.length);
+                    }
+                } else if (e.key === 'ArrowUp') {
+                    if (tickerSuggestionsVisible && items.length) {
+                        e.preventDefault();
+                        updateSuggHighlight(tickerSuggHighlight <= 0 ? items.length - 1 : tickerSuggHighlight - 1);
+                    }
+                } else if (e.key === 'Tab' && tickerSuggestionsVisible && tickerSuggHighlight >= 0 && items[tickerSuggHighlight]) {
+                    e.preventDefault();
+                    selectSuggestion(items[tickerSuggHighlight]);
                 }
             });
-            // Autocomplete on typing
+
             input.addEventListener('input', handleTickerInput);
-            // Close suggestions on click outside
+
+            input.addEventListener('focus', () => {
+                if (input.value.trim().length >= 2 && box && box.innerHTML.trim()) {
+                    box.classList.remove('hidden');
+                    tickerSuggestionsVisible = true;
+                }
+            });
+
             document.addEventListener('click', (ev) => {
                 if (!input.contains(ev.target) && box && !box.contains(ev.target)) {
                     box.classList.add('hidden');
                     tickerSuggestionsVisible = false;
+                    tickerSuggHighlight = -1;
                 }
             });
         }
